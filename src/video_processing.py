@@ -1,7 +1,8 @@
 import subprocess
 import os
 import sys
-
+from tempfile import mkdtemp
+import shutil
 
 def run_ffmpeg_command(command_args, is_ffprobe=False):
     if getattr(sys, 'frozen', False):
@@ -20,7 +21,6 @@ def run_ffmpeg_command(command_args, is_ffprobe=False):
     stdout, stderr = process.communicate()
     return stdout, stderr, process.returncode
 
-
 def get_video_duration(video_path):
     command = [
         "-v", "error",
@@ -36,69 +36,121 @@ def get_video_duration(video_path):
     except Exception as e:
         raise RuntimeError(f"Failed to get video duration for {video_path}: {e}")
 
-
-def reencode_to_uniform_format(input_file, output_file):
+def normalize_video(input_file, output_file, lossless=False):
+    """Normalize video to a consistent format for concatenation"""
     command = [
         "-i", input_file,
+        "-map", "0:v:0",  # Select first video stream
+        "-map", "0:a:0?",  # Select first audio stream if it exists
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "23",
+        "-preset", "fast"
+    ]
+    
+    if lossless:
+        command.extend(["-crf", "18"])
+    else:
+        command.extend(["-crf", "23"])
+    
+    command.extend([
         "-c:a", "aac",
         "-b:a", "192k",
-        "-strict", "experimental",
-        "-y", output_file
-    ]
+        "-ar", "44100",  # Consistent audio sample rate
+        "-pix_fmt", "yuv420p",  # Consistent pixel format
+        "-y",
+        output_file
+    ])
+    
     stdout, stderr, returncode = run_ffmpeg_command(command)
-    return returncode == 0, stderr.decode().strip()
-
+    if returncode != 0:
+        raise RuntimeError(f"Error normalizing video: {stderr.decode().strip()}")
+    return returncode == 0
 
 def cut_video_segment(input_file, output_file, start_time, end_time, lossless=False, intro_path=None, outro_path=None):
-    temp_main = "temp_main.mp4"
-    temp_concat_file = "temp_concat_list.txt"
-
+    # Create temporary directory for intermediate files
+    temp_dir = mkdtemp()
+    temp_files = []
+    
     try:
         # Step 1: Cut the main segment
-        command = ["-i", input_file, "-ss", start_time, "-to", end_time]
-        video_codec_options = ["-c:v", "copy"] if lossless else ["-c:v", "libx264", "-preset", "fast", "-crf", "23"]
-        audio_codec_options = ["-c:a", "copy"] if lossless else ["-c:a", "aac", "-strict", "experimental"]
-        command += video_codec_options + audio_codec_options + ["-y", temp_main]
-        stdout, stderr, returncode = run_ffmpeg_command(command)
+        temp_main = os.path.join(temp_dir, "temp_main.mp4")
+        cut_command = [
+            "-i", input_file,
+            "-ss", start_time,
+            "-to", end_time,
+            "-map", "0:v:0",  # Select first video stream
+            "-map", "0:a:0?",  # Select first audio stream if it exists
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23" if not lossless else "18",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-ar", "44100",
+            "-pix_fmt", "yuv420p",
+            "-y",
+            temp_main
+        ]
+        
+        stdout, stderr, returncode = run_ffmpeg_command(cut_command)
         if returncode != 0:
             raise RuntimeError(f"Error cutting main segment: {stderr.decode().strip()}")
+        temp_files.append(temp_main)
 
-        # Step 2: Prepare the concatenation list
-        with open(temp_concat_file, "w") as f:
-            if intro_path:
-                f.write(f"file '{intro_path}'\n")
-            f.write(f"file '{temp_main}'\n")
-            if outro_path:
-                f.write(f"file '{outro_path}'\n")
+        # Step 2: Normalize intro and outro if present
+        concat_list = []
+        
+        if intro_path:
+            temp_intro = os.path.join(temp_dir, "temp_intro.mp4")
+            if normalize_video(intro_path, temp_intro, lossless):
+                concat_list.append(temp_intro)
+                temp_files.append(temp_intro)
+        
+        concat_list.append(temp_main)
+        
+        if outro_path:
+            temp_outro = os.path.join(temp_dir, "temp_outro.mp4")
+            if normalize_video(outro_path, temp_outro, lossless):
+                concat_list.append(temp_outro)
+                temp_files.append(temp_outro)
 
-        # Step 3: Concatenate all clips
+        # Step 3: Create concatenation file
+        concat_file = os.path.join(temp_dir, "concat.txt")
+        with open(concat_file, "w", encoding='utf-8') as f:
+            for file_path in concat_list:
+                f.write(f"file '{file_path}'\n")
+        temp_files.append(concat_file)
+
+        # Step 4: Concatenate all clips
         concat_command = [
             "-f", "concat",
             "-safe", "0",
-            "-i", temp_concat_file,
+            "-i", concat_file,
             "-c:v", "libx264",
             "-preset", "fast",
-            "-crf", "23",
+            "-crf", "23" if not lossless else "18",
             "-c:a", "aac",
-            "-strict", "experimental",
-            "-y", output_file
+            "-b:a", "192k",
+            "-ar", "44100",
+            "-pix_fmt", "yuv420p",
+            "-y",
+            output_file
         ]
+        
         stdout, stderr, returncode = run_ffmpeg_command(concat_command)
         if returncode != 0:
             raise RuntimeError(f"Error concatenating clips: {stderr.decode().strip()}")
 
         return True, None
+
     except Exception as e:
         return False, str(e)
+    
     finally:
-        # Cleanup temporary files
-        for temp_file in [temp_main, temp_concat_file]:
+        # Clean up all temporary files
+        for temp_file in temp_files:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
-
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
 def validate_time_range(start_str, end_str, duration):
     try:
@@ -110,7 +162,6 @@ def validate_time_range(start_str, end_str, duration):
     except ValueError:
         return False
 
-
 def parse_time_string(time_string):
     parts = time_string.split(':')
     seconds = 0
@@ -119,7 +170,6 @@ def parse_time_string(time_string):
         seconds += int(part) * multiplier
         multiplier *= 60
     return seconds
-
 
 def format_time(seconds):
     hours = int(seconds // 3600)
