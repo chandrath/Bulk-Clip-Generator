@@ -34,14 +34,15 @@ class MainUI:
         # Configure grid weights for the main frame
         self.main_frame.grid_columnconfigure(0, weight=1, uniform="group1")  # Video Settings column
         self.main_frame.grid_columnconfigure(1, weight=1, uniform="group1")  # Output Settings column
-        self.main_frame.grid_rowconfigure(1, weight=1) # Time Ranges row
-        self.main_frame.grid_rowconfigure(2, weight=0) # Progress row
+        self.main_frame.grid_rowconfigure(1, weight=1)  # Time/Progress row
+        self.main_frame.grid_rowconfigure(2, weight=0) # Button row
 
         # Create sections
         self.create_video_section()
         self.create_output_section()
         self.create_time_section()
         self.create_progress_section()
+
 
         # Initialize processing variables
         self.processing_active = False
@@ -120,20 +121,21 @@ class MainUI:
         ttk.Radiobutton(output_frame, text="Compressed", variable=self.quality_var, value="Compressed").grid(row=1, column=2, sticky="w")
 
     def create_time_section(self):
-        # Time Range Frame
+         # Time Range Frame
         time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
-        time_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=10, padx=0) # Adjusted columnspan and padx
-        time_frame.grid_columnconfigure(0, weight=1) # Make the content expand
+        time_frame.grid(row=1, column=0, sticky="nsew", pady=10, padx=(0,5)) # Adjusted columnspan and padx
+        time_frame.grid_columnconfigure(0, weight=1)  # Make the time frame expand
 
-        ttk.Label(time_frame, text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):", style='Modern.TLabel').grid(row=0, column=0, sticky="ew", pady=5)
+        ttk.Label(time_frame, text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
         self.time_ranges_text = tk.Text(time_frame, height=5, wrap=tk.WORD)
         self.time_ranges_text.grid(row=1, column=0, sticky="nsew", pady=5)
         self.time_ranges_text.configure(font=('Helvetica', 10))
 
     def create_progress_section(self):
-        # Progress Frame
+       # Progress Frame
         progress_frame = ttk.LabelFrame(self.main_frame, text="Progress", padding="10")
-        progress_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(5, 10), padx=0) # Adjusted pady
+        progress_frame.grid(row=1, column=1, sticky="nsew", pady=10, padx=(5, 0))
+        progress_frame.grid_columnconfigure(0, weight=1)
 
         # Progress Labels
         self.progress_text = tk.StringVar(value="Ready to process...")
