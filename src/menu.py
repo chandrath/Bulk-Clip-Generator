@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 import webbrowser
 
-def create_menu(root, ui_instance=None):
+def create_menu(root, ui_instance=None): # Make ui_instance optional
     menubar = tk.Menu(root)
     root.config(menu=menubar)
 
@@ -27,5 +27,5 @@ def show_about():
 
 if __name__ == '__main__':
     root = tk.Tk()
-    create_menu(root)
+    create_menu(root) # Don't pass ui_instance for standalone test
     root.mainloop()
