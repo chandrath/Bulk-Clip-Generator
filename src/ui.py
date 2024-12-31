@@ -8,6 +8,8 @@ import threading
 import json
 import time
 from datetime import datetime, timedelta
+import webbrowser
+
 
 class MainUI:
     def __init__(self, root):
@@ -37,6 +39,7 @@ class MainUI:
         self.main_frame.grid_columnconfigure(1, weight=1)  # Output Settings column
         self.main_frame.grid_rowconfigure(1, weight=1)  # Time/Progress row
         self.main_frame.grid_rowconfigure(2, weight=0) # Button row
+
 
         # Create sections
         self.create_video_section()
@@ -125,10 +128,8 @@ class MainUI:
         self.quality_explanation = ttk.Label(output_frame, text="Lossless: Preserves the original video quality, resulting in larger file sizes. \nCompressed: Reduces file size by sacrificing some video quality.", style='Small.TLabel', wraplength=250)
         self.quality_explanation.grid(row=2, column=0, columnspan=3, sticky="w", pady=5)
 
-
-
     def create_time_section(self):
-         # Time Range Frame
+        # Time Range Frame
         time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
         time_frame.grid(row=1, column=0, sticky="nsew", pady=10, padx=(0,5)) # Adjusted columnspan and padx
         time_frame.grid_columnconfigure(0, weight=1)  # Make the time frame expand
@@ -171,11 +172,13 @@ class MainUI:
         button_frame = ttk.Frame(progress_frame)
         button_frame.grid(row=3, column=0, columnspan=3, pady=10)
 
-        # Process and Clear Buttons
+        # Process, Clear and Show Output Folder Buttons
         self.start_stop_button = ttk.Button(button_frame, text="Start Processing", command=self.toggle_processing, style='Modern.TButton')
         self.start_stop_button.grid(row=0, column=0, padx=5)
 
-        ttk.Button(button_frame, text="Clear Fields", command=self.clear_fields, style='Modern.TButton').grid(row=0, column=1, padx=5)
+        self.show_output_button = ttk.Button(button_frame, text="Show Output Folder", command=self.show_output_folder, style='Modern.TButton')
+        self.show_output_button.grid(row=0, column=1, padx=5)
+
 
     def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename):
         self.total_clips = len(parsed_ranges)
@@ -239,6 +242,7 @@ class MainUI:
             self.processing_active = False
             self.root.after(0, self.stop_processing)
 
+
     def browse_source_video(self):
         file = filedialog.askopenfile(title="Select Source Video", mode="r")
         if file:
@@ -278,6 +282,13 @@ class MainUI:
             self.output_location.set(folder_selected)
             self.update_file_history(folder_selected, self.output_location_history)
             self.output_combo['values'] = self.output_location_history
+    
+    def show_output_folder(self):
+        output_location = self.output_location.get()
+        if output_location and os.path.exists(output_location):
+            webbrowser.open("file:///" + output_location)
+        else:
+            messagebox.showerror("Error", "Output location is not set or does not exist.")
 
     def toggle_intro_outro(self):
         self.intro_combo.config(state="normal" if self.use_intro.get() else "disabled")

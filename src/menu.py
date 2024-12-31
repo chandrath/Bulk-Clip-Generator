@@ -10,6 +10,7 @@ def create_menu(root, ui_instance=None): # Make ui_instance optional
     # File Menu
     file_menu = tk.Menu(menubar, tearoff=0)
     file_menu.add_command(label="Open Source Video", command=ui_instance.browse_source_video if ui_instance else None)
+    file_menu.add_command(label="Clear Fields", command=ui_instance.clear_fields if ui_instance else None)
     file_menu.add_separator()
     file_menu.add_command(label="Exit", command=root.quit)
     menubar.add_cascade(label="File", menu=file_menu)
