@@ -1,4 +1,3 @@
-# ui.py
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import os
@@ -6,91 +5,214 @@ import re
 from video_processing import cut_video_segment, get_video_duration, validate_time_range
 import threading
 import json
+import time
+from datetime import datetime, timedelta
 
 class MainUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Bulk Clip Generator")
+        
+        # Set theme and style
+        style = ttk.Style()
+        style.theme_use('clam')  # Use 'clam' theme for a modern look
+        
+        # Configure custom styles
+        style.configure('Modern.TButton', padding=10, font=('Helvetica', 10))
+        style.configure('Modern.TEntry', padding=5)
+        style.configure('Modern.TFrame', background='#f0f0f0')
+        style.configure('Modern.TLabel', font=('Helvetica', 10))
+        style.configure('Title.TLabel', font=('Helvetica', 12, 'bold'))
+        
+        # Main frame with padding
+        self.main_frame = ttk.Frame(root, padding="20", style='Modern.TFrame')
+        self.main_frame.grid(row=0, column=0, sticky="nsew")
+        
+        # Configure grid weights
+        root.grid_rowconfigure(0, weight=1)
+        root.grid_columnconfigure(0, weight=1)
+        self.main_frame.grid_columnconfigure(1, weight=1)
 
-        # Configure grid layout weights for resizing
-        self.root.grid_columnconfigure(0, weight=1)
-        self.root.grid_columnconfigure(1, weight=2)
-        self.root.grid_rowconfigure(tk.ALL, weight=1)
+        # Create sections
+        self.create_video_section()
+        self.create_time_section()
+        self.create_output_section()
+        self.create_progress_section()
 
-        # --- UI Elements ---
-        # Source Video
-        tk.Label(self.root, text="Source Video:").grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-        self.source_video_path = tk.StringVar()
-        self.source_video_combo = ttk.Combobox(self.root, textvariable=self.source_video_path)
-        self.source_video_combo.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
-        tk.Button(self.root, text="Browse", command=self.browse_source_video).grid(row=0, column=2, sticky="ew", padx=5, pady=5)
-
-        # Intro Clip
-        self.use_intro = tk.BooleanVar()
-        tk.Checkbutton(self.root, text="Add Intro Clip:", variable=self.use_intro, command=self.toggle_intro_outro).grid(row=1, column=0, sticky="ew", padx=5, pady=5)
-        self.intro_clip_path = tk.StringVar()
-        self.intro_combo = ttk.Combobox(self.root, textvariable=self.intro_clip_path, state="disabled")
-        self.intro_combo.grid(row=1, column=1, sticky="ew", padx=5, pady=5)
-        self.intro_button = tk.Button(self.root, text="Browse", command=self.browse_intro_clip, state="disabled")
-        self.intro_button.grid(row=1, column=2, sticky="ew", padx=5, pady=5)
-
-        # Outro Clip
-        self.use_outro = tk.BooleanVar()
-        tk.Checkbutton(self.root, text="Add Outro Clip:", variable=self.use_outro, command=self.toggle_intro_outro).grid(row=2, column=0, sticky="ew", padx=5, pady=5)
-        self.outro_clip_path = tk.StringVar()
-        self.outro_combo = ttk.Combobox(self.root, textvariable=self.outro_clip_path, state="disabled")
-        self.outro_combo.grid(row=2, column=1, sticky="ew", padx=5, pady=5)
-        self.outro_button = tk.Button(self.root, text="Browse", command=self.browse_outro_clip, state="disabled")
-        self.outro_button.grid(row=2, column=2, sticky="ew", padx=5, pady=5)
-
-        # Time Selection
-        tk.Label(self.root, text="Time Ranges (e.g., 00:10-00:20, 01:00-01:30):").grid(row=3, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
-        self.time_ranges_text = tk.Text(self.root, height=5)
-        self.time_ranges_text.grid(row=4, column=0, columnspan=3, sticky="nsew", padx=5, pady=5)
-
-        # Output Location
-        tk.Label(self.root, text="Output Location:").grid(row=5, column=0, sticky="ew", padx=5, pady=5)
-        self.output_location = tk.StringVar()
-        self.output_combo = ttk.Combobox(self.root, textvariable=self.output_location)
-        self.output_combo.grid(row=5, column=1, sticky="ew", padx=5, pady=5)
-        tk.Button(self.root, text="Browse", command=self.browse_output_location).grid(row=5, column=2, sticky="ew", padx=5, pady=5)
-
-        # Quality Toggle
-        tk.Label(self.root, text="Quality:").grid(row=6, column=0, sticky="ew", padx=5, pady=5)
-        self.quality_var = tk.StringVar(value="Compressed")
-        tk.Radiobutton(self.root, text="Lossless", variable=self.quality_var, value="Lossless").grid(row=6, column=1, sticky="w", padx=5, pady=5)
-        tk.Radiobutton(self.root, text="Compressed", variable=self.quality_var, value="Compressed").grid(row=6, column=2, sticky="w", padx=5, pady=5)
-
-        # Buttons
-        self.start_stop_button = tk.Button(self.root, text="Start Processing", command=self.toggle_processing, font=("Arial", 12, "bold"), padx=20, pady=10)
-        self.start_stop_button.grid(row=7, column=0, columnspan=3, pady=20)
-        tk.Button(self.root, text="Clear Fields", command=self.clear_fields).grid(row=8, column=0, columnspan=3, pady=10)
-
-        # Progress Bar
-        self.progress_bar = ttk.Progressbar(self.root, orient="horizontal", length=200, mode="determinate")
-        self.progress_bar.grid(row=9, column=0, columnspan=3, sticky="ew", padx=5, pady=5)
+        # Initialize processing variables
         self.processing_active = False
+        self.start_time = None
+        self.total_clips = 0
+        self.processed_clips = 0
+        self.total_duration = 0
+        self.current_clip_start = 0
 
-        # File History and Settings
+        # Load settings
+        self.config_file = "user_config.json"
         self.source_video_history = []
         self.output_location_history = []
-        self.config_file = "user_config.json"
         self.load_settings()
 
         # Bind window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def clear_fields(self):
-        self.source_video_path.set("")
-        self.intro_clip_path.set("")
-        self.outro_clip_path.set("")
-        self.time_ranges_text.delete("1.0", tk.END)
-        self.output_location.set("")
-        self.quality_var.set("Compressed")
-        self.use_intro.set(False)
-        self.use_outro.set(False)
-        self.toggle_intro_outro()
+    def create_video_section(self):
+        # Source Video Frame
+        video_frame = ttk.LabelFrame(self.main_frame, text="Video Settings", padding="10")
+        video_frame.grid(row=0, column=0, columnspan=3, sticky="nsew", pady=(0, 10))
 
+        # Source Video
+        ttk.Label(video_frame, text="Source Video:", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
+        self.source_video_path = tk.StringVar()
+        self.source_video_combo = ttk.Combobox(video_frame, textvariable=self.source_video_path, style='Modern.TEntry')
+        self.source_video_combo.grid(row=0, column=1, sticky="ew", padx=5)
+        ttk.Button(video_frame, text="Browse", command=self.browse_source_video, style='Modern.TButton').grid(row=0, column=2, padx=5)
+
+        # Intro Clip
+        self.use_intro = tk.BooleanVar()
+        ttk.Checkbutton(video_frame, text="Add Intro:", variable=self.use_intro, command=self.toggle_intro_outro).grid(row=1, column=0, sticky="w", pady=5)
+        self.intro_clip_path = tk.StringVar()
+        self.intro_combo = ttk.Combobox(video_frame, textvariable=self.intro_clip_path, state="disabled")
+        self.intro_combo.grid(row=1, column=1, sticky="ew", padx=5)
+        self.intro_button = ttk.Button(video_frame, text="Browse", command=self.browse_intro_clip, state="disabled", style='Modern.TButton')
+        self.intro_button.grid(row=1, column=2, padx=5)
+
+        # Outro Clip
+        self.use_outro = tk.BooleanVar()
+        ttk.Checkbutton(video_frame, text="Add Outro:", variable=self.use_outro, command=self.toggle_intro_outro).grid(row=2, column=0, sticky="w", pady=5)
+        self.outro_clip_path = tk.StringVar()
+        self.outro_combo = ttk.Combobox(video_frame, textvariable=self.outro_clip_path, state="disabled")
+        self.outro_combo.grid(row=2, column=1, sticky="ew", padx=5)
+        self.outro_button = ttk.Button(video_frame, text="Browse", command=self.browse_outro_clip, state="disabled", style='Modern.TButton')
+        self.outro_button.grid(row=2, column=2, padx=5)
+
+    def create_time_section(self):
+        # Time Range Frame
+        time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
+        time_frame.grid(row=1, column=0, columnspan=3, sticky="nsew", pady=10)
+
+        ttk.Label(time_frame, text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
+        self.time_ranges_text = tk.Text(time_frame, height=5, wrap=tk.WORD)
+        self.time_ranges_text.grid(row=1, column=0, sticky="nsew", pady=5)
+        self.time_ranges_text.configure(font=('Helvetica', 10))
+
+    def create_output_section(self):
+        # Output Frame
+        output_frame = ttk.LabelFrame(self.main_frame, text="Output Settings", padding="10")
+        output_frame.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=10)
+
+        # Output Location
+        ttk.Label(output_frame, text="Output Location:", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
+        self.output_location = tk.StringVar()
+        self.output_combo = ttk.Combobox(output_frame, textvariable=self.output_location)
+        self.output_combo.grid(row=0, column=1, sticky="ew", padx=5)
+        ttk.Button(output_frame, text="Browse", command=self.browse_output_location, style='Modern.TButton').grid(row=0, column=2, padx=5)
+
+        # Quality Settings
+        ttk.Label(output_frame, text="Quality:", style='Modern.TLabel').grid(row=1, column=0, sticky="w", pady=5)
+        self.quality_var = tk.StringVar(value="Compressed")
+        ttk.Radiobutton(output_frame, text="Lossless", variable=self.quality_var, value="Lossless").grid(row=1, column=1, sticky="w")
+        ttk.Radiobutton(output_frame, text="Compressed", variable=self.quality_var, value="Compressed").grid(row=1, column=2, sticky="w")
+
+    def create_progress_section(self):
+        # Progress Frame
+        progress_frame = ttk.LabelFrame(self.main_frame, text="Progress", padding="10")
+        progress_frame.grid(row=3, column=0, columnspan=3, sticky="nsew", pady=10)
+
+        # Progress Labels
+        self.progress_text = tk.StringVar(value="Ready to process...")
+        ttk.Label(progress_frame, textvariable=self.progress_text, style='Modern.TLabel').grid(row=0, column=0, columnspan=3, sticky="w", pady=5)
+        
+        self.time_text = tk.StringVar(value="Estimated time remaining: --:--")
+        ttk.Label(progress_frame, textvariable=self.time_text, style='Modern.TLabel').grid(row=1, column=0, columnspan=3, sticky="w", pady=5)
+
+        # Progress Bar
+        self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="determinate")
+        self.progress_bar.grid(row=2, column=0, columnspan=3, sticky="ew", pady=10)
+
+        # Buttons Frame
+        button_frame = ttk.Frame(progress_frame)
+        button_frame.grid(row=3, column=0, columnspan=3, pady=10)
+
+        # Process and Clear Buttons
+        self.start_stop_button = ttk.Button(button_frame, text="Start Processing", command=self.toggle_processing, style='Modern.TButton')
+        self.start_stop_button.grid(row=0, column=0, padx=5)
+        
+        ttk.Button(button_frame, text="Clear Fields", command=self.clear_fields, style='Modern.TButton').grid(row=0, column=1, padx=5)
+
+    def update_progress(self, current_file, total_files, file_progress=0):
+        if not self.processing_active:
+            return
+
+        self.processed_clips = current_file
+        total_progress = ((current_file - 1) * 100 + file_progress) / total_files
+        self.progress_bar["value"] = total_progress
+
+        # Calculate time remaining
+        if self.start_time is None:
+            self.start_time = time.time()
+        else:
+            elapsed_time = time.time() - self.start_time
+            if total_progress > 0:
+                total_estimated_time = (elapsed_time * 100) / total_progress
+                remaining_time = total_estimated_time - elapsed_time
+                remaining_str = str(timedelta(seconds=int(remaining_time)))
+                elapsed_str = str(timedelta(seconds=int(elapsed_time)))
+                self.time_text.set(f"Elapsed: {elapsed_str} | Remaining: {remaining_str}")
+
+        self.progress_text.set(f"Processing clip {current_file}/{total_files} ({total_progress:.1f}%)")
+        self.root.update_idletasks()
+
+    def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename):
+        self.total_clips = len(parsed_ranges)
+        self.start_time = None
+        
+        try:
+            for i, (start_time_str, end_time_str) in enumerate(parsed_ranges, 1):
+                if not self.processing_active:
+                    return
+
+                if not validate_time_range(start_time_str, end_time_str, get_video_duration(source_video)):
+                    messagebox.showerror("Error", f"Invalid time range: {start_time_str}-{end_time_str}")
+                    self.processing_active = False
+                    self.root.after(0, self.stop_processing)
+                    return
+
+                output_filename = f"Clip_{i}_{original_filename}.mp4"
+                output_path = os.path.join(output_location, output_filename)
+
+                # Update progress at the start of processing each clip
+                self.update_progress(i, self.total_clips, 0)
+
+                success, error_message = cut_video_segment(
+                    source_video,
+                    output_path,
+                    start_time_str,
+                    end_time_str,
+                    lossless,
+                    intro_clip if self.use_intro.get() else None,
+                    outro_clip if self.use_outro.get() else None
+                )
+
+                if not success:
+                    messagebox.showerror("Error", f"Error processing clip {i}: {error_message}")
+                    self.processing_active = False
+                    self.root.after(0, self.stop_processing)
+                    return
+
+                # Update progress after completing each clip
+                self.update_progress(i, self.total_clips, 100)
+
+            self.processing_active = False
+            self.root.after(0, self.stop_processing)
+            messagebox.showinfo("Success", "Video clipping completed!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            self.processing_active = False
+            self.root.after(0, self.stop_processing)
+
+    # [Rest of the methods remain the same as in the original UI class]
     def browse_source_video(self):
         file = filedialog.askopenfile(title="Select Source Video", mode="r")
         if file:
@@ -117,9 +239,10 @@ class MainUI:
 
     def browse_output_location(self):
         folder_selected = filedialog.askdirectory(title="Select Output Location")
-        self.output_location.set(folder_selected)
-        self.update_file_history(folder_selected, self.output_location_history)
-        self.output_combo['values'] = self.output_location_history
+        if folder_selected:
+            self.output_location.set(folder_selected)
+            self.update_file_history(folder_selected, self.output_location_history)
+            self.output_combo['values'] = self.output_location_history
 
     def toggle_intro_outro(self):
         self.intro_combo.config(state="normal" if self.use_intro.get() else "disabled")
@@ -132,12 +255,26 @@ class MainUI:
         if not self.use_outro.get():
             self.outro_clip_path.set("")
 
+    def clear_fields(self):
+        self.source_video_path.set("")
+        self.intro_clip_path.set("")
+        self.outro_clip_path.set("")
+        self.time_ranges_text.delete("1.0", tk.END)
+        self.output_location.set("")
+        self.quality_var.set("Compressed")
+        self.use_intro.set(False)
+        self.use_outro.set(False)
+        self.toggle_intro_outro()
+        self.progress_text.set("Ready to process...")
+        self.time_text.set("Estimated time remaining: --:--")
+        self.progress_bar["value"] = 0
+
     def update_file_history(self, filepath, history_list):
         if filepath in history_list:
-            history_list.remove(filepath)
+           history_list.remove(filepath)
         history_list.insert(0, filepath)
         if len(history_list) > 10:
-            history_list.pop()
+           history_list.pop()
 
     def load_settings(self):
         try:
@@ -179,8 +316,14 @@ class MainUI:
             json.dump(config, f, indent=4)
 
     def on_closing(self):
-        self.save_settings()
-        self.root.destroy()
+        if self.processing_active:
+            if messagebox.askokcancel("Quit", "Processing is active. Do you want to cancel and quit?"):
+                self.processing_active = False
+                self.save_settings()
+                self.root.destroy()
+        else:
+            self.save_settings()
+            self.root.destroy()
 
     def toggle_processing(self):
         if self.processing_active:
@@ -194,13 +337,14 @@ class MainUI:
             return
 
         source_video = self.source_video_path.get()
-        intro_clip = self.intro_clip_path.get()
-        outro_clip = self.outro_clip_path.get()
+        intro_clip = self.intro_clip_path.get() if self.use_intro.get() else None
+        outro_clip = self.outro_clip_path.get() if self.use_outro.get() else None
         time_ranges_text = self.time_ranges_text.get("1.0", "end-1c").strip()
         output_location = self.output_location.get()
         quality = self.quality_var.get()
         lossless = quality == "Lossless"
 
+        # Validate inputs
         if not source_video or not os.path.exists(source_video):
             messagebox.showerror("Error", "Please select a valid source video file.")
             return
@@ -217,6 +361,7 @@ class MainUI:
             messagebox.showerror("Error", "Please enter time ranges.")
             return
 
+        # Parse time ranges
         time_ranges = time_ranges_text.split(',')
         parsed_ranges = []
         for range_str in time_ranges:
@@ -228,71 +373,37 @@ class MainUI:
                 messagebox.showerror("Error", f"Invalid time range format: {range_str.strip()}")
                 return
 
-        duration = get_video_duration(source_video)
-        if duration is None:
-            messagebox.showerror("Error", f"Could not determine the duration of the source video.")
-            return
-
-        self.start_stop_button.config(text="Stop Processing", fg="red")
+        # Start processing
+        self.start_stop_button.config(text="Stop Processing")
         self.progress_bar["value"] = 0
-        self.progress_bar["maximum"] = len(parsed_ranges)
         self.processing_active = True
+        self.progress_text.set("Initializing...")
+        self.time_text.set("Calculating time remaining...")
 
         original_filename = os.path.splitext(os.path.basename(source_video))[0]
 
-        # Start video processing in a separate thread
-        threading.Thread(target=self.process_clips, args=(parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename,)).start()
-
-    def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename):
-        try:
-            for i, (start_time_str, end_time_str) in enumerate(parsed_ranges):
-                if not self.processing_active:
-                    return
-                if not validate_time_range(start_time_str, end_time_str, get_video_duration(source_video)):
-                    messagebox.showerror("Error", f"Invalid time range: {start_time_str}-{end_time_str} exceeds video duration or is improperly formatted.")
-                    self.processing_active = False
-                    self.root.after(0, self.stop_processing)  # Ensure UI update happens in main thread
-                    return
-
-                output_filename = f"Clip_{i+1}_{original_filename}.mp4"
-                output_path = os.path.join(output_location, output_filename)
-
-                print(f"Processing clip {i+1}/{len(parsed_ranges)}: {start_time_str} - {end_time_str}")
-                success, error_message = cut_video_segment(
-                    source_video,
-                    output_path,
-                    start_time_str,
-                    end_time_str,
-                    lossless,
-                    intro_clip if self.use_intro.get() else None,
-                    outro_clip if self.use_outro.get() else None
-                )
-
-                if success:
-                    self.progress_bar["value"] = i + 1
-                    self.root.update_idletasks()
-                else:
-                    messagebox.showerror("Error", f"Error processing clip {i+1}: {error_message}")
-                    self.processing_active = False
-                    self.root.after(0, self.stop_processing)  # Ensure UI update happens in main thread
-                    return
-
-            self.processing_active = False
-            self.root.after(0, self.stop_processing)  # Ensure UI update happens in main thread
-            messagebox.showinfo("Success", "Video clipping completed!")
-        except Exception as e:
-            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
-            self.processing_active = False
-            self.root.after(0, self.stop_processing)  # Ensure UI update happens in main thread
+        # Start processing in a separate thread
+        threading.Thread(target=self.process_clips, args=(
+            parsed_ranges,
+            source_video,
+            intro_clip,
+            outro_clip,
+            output_location,
+            lossless,
+            original_filename
+        )).start()
 
     def stop_processing(self):
         self.processing_active = False
-        self.start_stop_button.config(text="Start Processing", fg="black")
+        self.start_stop_button.config(text="Start Processing")
+        self.progress_text.set("Processing stopped")
+        self.time_text.set("Estimated time remaining: --:--")
+        self.start_time = None
 
 def create_ui(root):
     return MainUI(root)
 
 if __name__ == '__main__':
     root = tk.Tk()
-    create_ui(root)
+    app = MainUI(root)
     root.mainloop()
