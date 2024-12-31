@@ -1,3 +1,4 @@
+# ui.py
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import os
@@ -59,7 +60,9 @@ class MainUI:
         tk.Radiobutton(self.root, text="Compressed", variable=self.quality_var, value="Compressed").grid(row=6, column=2, sticky="w", padx=5, pady=5)
 
         # Start Processing Button
-        tk.Button(self.root, text="Start Processing", command=self.start_processing).grid(row=7, column=0, columnspan=3, pady=20)
+        tk.Button(self.root, text="Start Processing", command=self.start_processing).grid(row=7, column=0, columnspan=1, pady=20)
+        #Stop Processing Button
+        tk.Button(self.root, text="Stop Processing", command=self.stop_processing, fg="red").grid(row=7, column=2, columnspan=1, pady=20,sticky="e")
 
         # Progress Bar
         self.progress_bar = ttk.Progressbar(self.root, orient="horizontal", length=200, mode="determinate")
@@ -70,7 +73,6 @@ class MainUI:
         self.source_video_history = []
         self.output_location_history = []
 
-
     def browse_source_video(self):
       file = filedialog.askopenfile(title="Select Source Video", mode="r")
       if file:
@@ -78,7 +80,7 @@ class MainUI:
           self.source_video_path.set(filename)
           self.update_file_history(filename,self.source_video_history)
           self.source_video_combo['values'] = self.source_video_history
-    
+
     def browse_intro_clip(self):
         file = filedialog.askopenfile(title="Select Intro Clip", mode="r")
         if file:
@@ -87,7 +89,6 @@ class MainUI:
            self.update_file_history(filename, self.source_video_history)
            self.intro_combo['values'] = self.source_video_history
 
-
     def browse_outro_clip(self):
         file = filedialog.askopenfile(title="Select Outro Clip", mode="r")
         if file:
@@ -95,7 +96,6 @@ class MainUI:
             self.outro_clip_path.set(filename)
             self.update_file_history(filename,self.source_video_history)
             self.outro_combo['values'] = self.source_video_history
-
 
     def browse_output_location(self):
         folder_selected = filedialog.askdirectory(title="Select Output Location")
@@ -120,14 +120,12 @@ class MainUI:
             self.outro_clip_path.set("")
             self.outro_button.config(state="disabled")
 
-
     def update_file_history(self,filepath,history_list):
           if filepath in history_list:
                 history_list.remove(filepath)
           history_list.insert(0,filepath)
           if len(history_list)>10:
               history_list.pop()
-
 
     def start_processing(self):
         if self.processing_active:
@@ -182,10 +180,12 @@ class MainUI:
 
         # Start video processing in a separate thread
         threading.Thread(target=self.process_clips, args=(parsed_ranges,source_video,intro_clip,outro_clip,output_location,lossless,original_filename,)).start()
-    
+
     def process_clips(self, parsed_ranges,source_video,intro_clip,outro_clip,output_location,lossless,original_filename):
         try:
            for i, (start_time_str, end_time_str) in enumerate(parsed_ranges):
+              if not self.processing_active:
+                 return
               if not validate_time_range(start_time_str, end_time_str, get_video_duration(source_video)):
                 messagebox.showerror("Error", f"Invalid time range: {start_time_str}-{end_time_str} exceeds video duration or is improperly formatted.")
                 self.processing_active = False
@@ -193,7 +193,7 @@ class MainUI:
 
               output_filename = f"Clip_{i+1}_{original_filename}.mp4"
               output_path = os.path.join(output_location, output_filename)
-    
+
               print(f"Processing clip {i+1}/{len(parsed_ranges)}: {start_time_str} - {end_time_str}")
               success, error_message = cut_video_segment(
                   source_video,
@@ -204,7 +204,7 @@ class MainUI:
                   intro_clip if self.use_intro.get() else None,
                   outro_clip if self.use_outro.get() else None
               )
-        
+
               if success:
                   self.progress_bar["value"] = i + 1
                   self.root.update_idletasks() # Update the progress bar
@@ -212,13 +212,14 @@ class MainUI:
                 messagebox.showerror("Error", f"Error processing clip {i+1}: {error_message}")
                 self.processing_active = False
                 return
-           
+
            self.processing_active = False
            messagebox.showinfo("Success", "Video clipping completed!")
         except Exception as e:
              messagebox.showerror("Error",f"An unexpected error occurred: {e}")
              self.processing_active = False
-
+    def stop_processing(self):
+      self.processing_active = False
 
 def create_ui(root):
     return MainUI(root)

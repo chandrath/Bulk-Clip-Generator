@@ -1,3 +1,4 @@
+# video_processing.py
 import subprocess
 import os
 import sys
@@ -9,12 +10,11 @@ def run_ffmpeg_command(command_args, is_ffprobe=False):
     else:
         # If the application is run normally
         base_path = os.path.dirname(os.path.abspath(__file__))
-    
+
     if is_ffprobe:
       ffmpeg_path = os.path.join(base_path, "ffmpeg", "ffprobe.exe")
     else:
         ffmpeg_path = os.path.join(base_path, "ffmpeg", "ffmpeg.exe")
-
 
     full_command = [ffmpeg_path] + command_args
     process = subprocess.Popen(full_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -23,50 +23,68 @@ def run_ffmpeg_command(command_args, is_ffprobe=False):
 
 def cut_video_segment(input_file, output_file, start_time, end_time, lossless=False, intro_path=None, outro_path=None):
     command = ["-i", input_file, "-ss", start_time, "-to", end_time]
-    if lossless:
-        command.extend(["-c", "copy"])
-    else:
-        command.extend(["-c:v", "libx264", "-crf", "23", "-preset", "fast", "-c:a", "aac"]) # Example compressed settings
+    video_codec_options = ["-c:v", "copy"] if lossless else ["-c:v", "libx264", "-crf", "23", "-preset", "fast"]
+    audio_codec_options = ["-c:a", "copy"] if lossless else ["-c:a", "aac", "-strict", "experimental"]
 
     if intro_path and outro_path:
-        # Use concat demuxer for intro, segment, and outro
-        with open("concat_list.txt", "w") as f:
-            f.write(f"file '{intro_path}'\n")
-            f.write(f"file 'intermediate_clip.mp4'\n") # Intermediate clip
-            f.write(f"file '{outro_path}'\n")
-
-        cut_command = command + ["intermediate_clip.mp4"]
+        temp_output_file = "intermediate_clip.mp4"
+        cut_command = command + video_codec_options + audio_codec_options + ["-y", temp_output_file]
         stdout, stderr, returncode = run_ffmpeg_command(cut_command)
         if returncode != 0:
             return False, stderr.decode()
 
-        concat_command = ["-f", "concat", "-safe", "0", "-i", "concat_list.txt", "-c", "copy", output_file]
+        concat_command = [
+            "-i", intro_path,
+            "-i", temp_output_file,
+            "-i", outro_path,
+            "-filter_complex",
+            "[0:v]scale=iw*min(1\\,ih/H):ih*min(1\\,iw/W),pad=W:H:(ow-iw)/2:(oh-ih)/2:color=black[v0];"
+            "[1:v]scale=iw*min(1\\,ih/H):ih*min(1\\,iw/W),pad=W:H:(ow-iw)/2:(oh-ih)/2:color=black[v1];"
+            "[2:v]scale=iw*min(1\\,ih/H):ih*min(1\\,iw/W),pad=W:H:(ow-iw)/2:(oh-ih)/2:color=black[v2];"
+            "[0:a][1:a][2:a]amerge=inputs=3[a];"
+            "[v0][a][v1][a][v2][a]concat=n=3:v=1:a=1[s]",
+            "-map", "[s]",
+            "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+            "-c:a", "aac", "-strict", "experimental",
+            "-y", output_file
+        ]
         stdout, stderr, returncode = run_ffmpeg_command(concat_command)
-        os.remove("concat_list.txt")
-        os.remove("intermediate_clip.mp4")
+        os.remove(temp_output_file)
         return returncode == 0, stderr.decode()
 
     elif intro_path:
-        cut_command = command + ["intermediate_clip.mp4"]
-        stdout, stderr, returncode = run_ffmpeg_command(cut_command)
-        if returncode != 0:
-            return False, stderr.decode()
-        with open("concat_list.txt", "w") as f:
-            f.write(f"file '{intro_path}'\n")
-            f.write(f"file 'intermediate_clip.mp4'\n")
-        concat_command = ["-f", "concat", "-safe", "0", "-i", "concat_list.txt", "-c", "copy", output_file]
-        stdout, stderr, returncode = run_ffmpeg_command(concat_command)
-        os.remove("concat_list.txt")
-        os.remove("intermediate_clip.mp4")
-        return returncode == 0, stderr.decode()
+         temp_output_file = "intermediate_clip.mp4"
+         cut_command = command + video_codec_options + audio_codec_options + ["-y", temp_output_file]
+         stdout, stderr, returncode = run_ffmpeg_command(cut_command)
+         if returncode != 0:
+             return False, stderr.decode()
+
+         concat_command = [
+             "-i", intro_path,
+             "-i", temp_output_file,
+             "-filter_complex",
+             "[0:v]scale=iw*min(1\\,ih/H):ih*min(1\\,iw/W),pad=W:H:(ow-iw)/2:(oh-ih)/2:color=black[v0];"
+             "[1:v]scale=iw*min(1\\,ih/H):ih*min(1\\,iw/W),pad=W:H:(ow-iw)/2:(oh-ih)/2:color=black[v1];"
+             "[0:a][1:a]amerge=inputs=2[a];"
+             "[v0][a][v1][a]concat=n=2:v=1:a=1[s]",
+             "-map", "[s]",
+             "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+             "-c:a", "aac", "-strict", "experimental",
+             "-y", output_file
+         ]
+         stdout, stderr, returncode = run_ffmpeg_command(concat_command)
+         os.remove(temp_output_file)
+         return returncode == 0, stderr.decode()
 
     elif outro_path:
-        cut_command = command + [output_file]
+        cut_command = command + video_codec_options + audio_codec_options + ["-y", output_file]
         stdout, stderr, returncode = run_ffmpeg_command(cut_command)
         return returncode == 0, stderr.decode()
 
     else:
-        command.append(output_file)
+        command.extend(video_codec_options)
+        command.extend(audio_codec_options)
+        command.extend(["-y", output_file])
         stdout, stderr, returncode = run_ffmpeg_command(command)
         return returncode == 0, stderr.decode()
 
