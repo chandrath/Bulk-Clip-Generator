@@ -31,7 +31,7 @@ class MainUI:
         self.main_frame = ttk.Frame(root, padding="20", style='Modern.TFrame')
         self.main_frame.grid(row=0, column=0, sticky="nsew")
 
-        # Configure grid weights for the main frame
+         # Configure grid weights for the main frame
         self.main_frame.grid_columnconfigure(0, weight=2)  # Video Settings column
         self.main_frame.grid_columnconfigure(1, weight=1)  # Output Settings column
         self.main_frame.grid_rowconfigure(1, weight=1)  # Time/Progress row
@@ -66,7 +66,7 @@ class MainUI:
     def create_video_section(self):
         # Source Video Frame
         video_frame = ttk.LabelFrame(self.main_frame, text="Video Settings", padding="10")
-        video_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=(0, 10)) # Added padx
+        video_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=(0, 10)) # Adjusted padx
 
         # Source Video
         ttk.Label(video_frame, text="Source Video:", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
@@ -134,7 +134,7 @@ class MainUI:
         ttk.Label(time_frame, text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
 
         # Text widget
-        self.time_ranges_text = tk.Text(time_text_frame, height=5, wrap=tk.NONE)
+        self.time_ranges_text = tk.Text(time_text_frame, height=5, wrap=tk.WORD)
         self.time_ranges_text.grid(row=0, column=0, sticky="nsew")
         self.time_ranges_text.configure(font=('Helvetica', 10))
 
@@ -142,6 +142,7 @@ class MainUI:
         time_scrollbar = ttk.Scrollbar(time_text_frame, orient="vertical", command=self.time_ranges_text.yview)
         time_scrollbar.grid(row=0, column=1, sticky="ns")
         self.time_ranges_text.config(yscrollcommand=time_scrollbar.set)
+
 
     def create_progress_section(self):
         # Progress Frame
