@@ -1,3 +1,4 @@
+# video_processing.py
 import subprocess
 import os
 import sys
@@ -45,12 +46,12 @@ def normalize_video(input_file, output_file, lossless=False):
         "-c:v", "libx264",
         "-preset", "fast"
     ]
-    
+
     if lossless:
         command.extend(["-crf", "18"])
     else:
         command.extend(["-crf", "23"])
-    
+
     command.extend([
         "-c:a", "aac",
         "-b:a", "192k",
@@ -59,17 +60,17 @@ def normalize_video(input_file, output_file, lossless=False):
         "-y",
         output_file
     ])
-    
+
     stdout, stderr, returncode = run_ffmpeg_command(command)
     if returncode != 0:
         raise RuntimeError(f"Error normalizing video: {stderr.decode().strip()}")
     return returncode == 0
 
-def cut_video_segment(input_file, output_file, start_time, end_time, lossless=False, intro_path=None, outro_path=None):
+def cut_video_segment(input_file, output_file, start_time, end_time, lossless=False, intro_path=None, outro_path=None, progress_callback=None):
     # Create temporary directory for intermediate files
     temp_dir = mkdtemp()
     temp_files = []
-    
+
     try:
         # Step 1: Cut the main segment
         temp_main = os.path.join(temp_dir, "temp_main.mp4")
@@ -89,28 +90,36 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
             "-y",
             temp_main
         ]
-        
+
         stdout, stderr, returncode = run_ffmpeg_command(cut_command)
         if returncode != 0:
             raise RuntimeError(f"Error cutting main segment: {stderr.decode().strip()}")
         temp_files.append(temp_main)
 
+        # After cutting main segment:
+        if progress_callback:
+            progress_callback(33)  # 33% complete after main cut
+
         # Step 2: Normalize intro and outro if present
         concat_list = []
-        
+
         if intro_path:
             temp_intro = os.path.join(temp_dir, "temp_intro.mp4")
             if normalize_video(intro_path, temp_intro, lossless):
                 concat_list.append(temp_intro)
                 temp_files.append(temp_intro)
-        
+
         concat_list.append(temp_main)
-        
+
         if outro_path:
             temp_outro = os.path.join(temp_dir, "temp_outro.mp4")
             if normalize_video(outro_path, temp_outro, lossless):
                 concat_list.append(temp_outro)
                 temp_files.append(temp_outro)
+
+        # After normalizing intro/outro:
+        if progress_callback:
+            progress_callback(66)  # 66% complete after normalization
 
         # Step 3: Create concatenation file
         concat_file = os.path.join(temp_dir, "concat.txt")
@@ -134,16 +143,20 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
             "-y",
             output_file
         ]
-        
+
         stdout, stderr, returncode = run_ffmpeg_command(concat_command)
         if returncode != 0:
             raise RuntimeError(f"Error concatenating clips: {stderr.decode().strip()}")
+
+        # After final concatenation:
+        if progress_callback:
+            progress_callback(100)  # 100% complete
 
         return True, None
 
     except Exception as e:
         return False, str(e)
-    
+
     finally:
         # Clean up all temporary files
         for temp_file in temp_files:

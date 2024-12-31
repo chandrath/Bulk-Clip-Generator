@@ -1,3 +1,4 @@
+# ui.py
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import os
@@ -12,22 +13,24 @@ class MainUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Bulk Clip Generator")
-        
+
         # Set theme and style
         style = ttk.Style()
         style.theme_use('clam')  # Use 'clam' theme for a modern look
-        
+
         # Configure custom styles
         style.configure('Modern.TButton', padding=10, font=('Helvetica', 10))
         style.configure('Modern.TEntry', padding=5)
         style.configure('Modern.TFrame', background='#f0f0f0')
         style.configure('Modern.TLabel', font=('Helvetica', 10))
         style.configure('Title.TLabel', font=('Helvetica', 12, 'bold'))
-        
+        style.configure('Bold.TLabel', font=('Helvetica', 10, 'bold'))
+        style.configure('Italic.TLabel', font=('Helvetica', 8, 'italic'))
+
         # Main frame with padding
         self.main_frame = ttk.Frame(root, padding="20", style='Modern.TFrame')
         self.main_frame.grid(row=0, column=0, sticky="nsew")
-        
+
         # Configure grid weights
         root.grid_rowconfigure(0, weight=1)
         root.grid_columnconfigure(0, weight=1)
@@ -50,6 +53,8 @@ class MainUI:
         # Load settings
         self.config_file = "user_config.json"
         self.source_video_history = []
+        self.intro_clip_history = []
+        self.outro_clip_history = []
         self.output_location_history = []
         self.load_settings()
 
@@ -64,27 +69,36 @@ class MainUI:
         # Source Video
         ttk.Label(video_frame, text="Source Video:", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
         self.source_video_path = tk.StringVar()
-        self.source_video_combo = ttk.Combobox(video_frame, textvariable=self.source_video_path, style='Modern.TEntry')
+        self.source_video_filename = tk.StringVar()
+        self.source_video_dir = tk.StringVar()
+        self.source_video_combo = ttk.Combobox(video_frame, textvariable=self.source_video_filename, style='Modern.TEntry')
         self.source_video_combo.grid(row=0, column=1, sticky="ew", padx=5)
         ttk.Button(video_frame, text="Browse", command=self.browse_source_video, style='Modern.TButton').grid(row=0, column=2, padx=5)
+        ttk.Label(video_frame, textvariable=self.source_video_dir, style='Italic.TLabel').grid(row=1, column=1, sticky="ew", padx=5)
 
         # Intro Clip
         self.use_intro = tk.BooleanVar()
-        ttk.Checkbutton(video_frame, text="Add Intro:", variable=self.use_intro, command=self.toggle_intro_outro).grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Checkbutton(video_frame, text="Add Intro:", variable=self.use_intro, command=self.toggle_intro_outro).grid(row=2, column=0, sticky="w", pady=5)
         self.intro_clip_path = tk.StringVar()
-        self.intro_combo = ttk.Combobox(video_frame, textvariable=self.intro_clip_path, state="disabled")
-        self.intro_combo.grid(row=1, column=1, sticky="ew", padx=5)
+        self.intro_clip_filename = tk.StringVar()
+        self.intro_clip_dir = tk.StringVar()
+        self.intro_combo = ttk.Combobox(video_frame, textvariable=self.intro_clip_filename, state="disabled")
+        self.intro_combo.grid(row=2, column=1, sticky="ew", padx=5)
         self.intro_button = ttk.Button(video_frame, text="Browse", command=self.browse_intro_clip, state="disabled", style='Modern.TButton')
-        self.intro_button.grid(row=1, column=2, padx=5)
+        self.intro_button.grid(row=2, column=2, padx=5)
+        ttk.Label(video_frame, textvariable=self.intro_clip_dir, style='Italic.TLabel').grid(row=3, column=1, sticky="ew", padx=5)
 
         # Outro Clip
         self.use_outro = tk.BooleanVar()
-        ttk.Checkbutton(video_frame, text="Add Outro:", variable=self.use_outro, command=self.toggle_intro_outro).grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Checkbutton(video_frame, text="Add Outro:", variable=self.use_outro, command=self.toggle_intro_outro).grid(row=4, column=0, sticky="w", pady=5)
         self.outro_clip_path = tk.StringVar()
-        self.outro_combo = ttk.Combobox(video_frame, textvariable=self.outro_clip_path, state="disabled")
-        self.outro_combo.grid(row=2, column=1, sticky="ew", padx=5)
+        self.outro_clip_filename = tk.StringVar()
+        self.outro_clip_dir = tk.StringVar()
+        self.outro_combo = ttk.Combobox(video_frame, textvariable=self.outro_clip_filename, state="disabled")
+        self.outro_combo.grid(row=4, column=1, sticky="ew", padx=5)
         self.outro_button = ttk.Button(video_frame, text="Browse", command=self.browse_outro_clip, state="disabled", style='Modern.TButton')
-        self.outro_button.grid(row=2, column=2, padx=5)
+        self.outro_button.grid(row=4, column=2, padx=5)
+        ttk.Label(video_frame, textvariable=self.outro_clip_dir, style='Italic.TLabel').grid(row=5, column=1, sticky="ew", padx=5)
 
     def create_time_section(self):
         # Time Range Frame
@@ -122,7 +136,7 @@ class MainUI:
         # Progress Labels
         self.progress_text = tk.StringVar(value="Ready to process...")
         ttk.Label(progress_frame, textvariable=self.progress_text, style='Modern.TLabel').grid(row=0, column=0, columnspan=3, sticky="w", pady=5)
-        
+
         self.time_text = tk.StringVar(value="Estimated time remaining: --:--")
         ttk.Label(progress_frame, textvariable=self.time_text, style='Modern.TLabel').grid(row=1, column=0, columnspan=3, sticky="w", pady=5)
 
@@ -137,36 +151,13 @@ class MainUI:
         # Process and Clear Buttons
         self.start_stop_button = ttk.Button(button_frame, text="Start Processing", command=self.toggle_processing, style='Modern.TButton')
         self.start_stop_button.grid(row=0, column=0, padx=5)
-        
+
         ttk.Button(button_frame, text="Clear Fields", command=self.clear_fields, style='Modern.TButton').grid(row=0, column=1, padx=5)
-
-    def update_progress(self, current_file, total_files, file_progress=0):
-        if not self.processing_active:
-            return
-
-        self.processed_clips = current_file
-        total_progress = ((current_file - 1) * 100 + file_progress) / total_files
-        self.progress_bar["value"] = total_progress
-
-        # Calculate time remaining
-        if self.start_time is None:
-            self.start_time = time.time()
-        else:
-            elapsed_time = time.time() - self.start_time
-            if total_progress > 0:
-                total_estimated_time = (elapsed_time * 100) / total_progress
-                remaining_time = total_estimated_time - elapsed_time
-                remaining_str = str(timedelta(seconds=int(remaining_time)))
-                elapsed_str = str(timedelta(seconds=int(elapsed_time)))
-                self.time_text.set(f"Elapsed: {elapsed_str} | Remaining: {remaining_str}")
-
-        self.progress_text.set(f"Processing clip {current_file}/{total_files} ({total_progress:.1f}%)")
-        self.root.update_idletasks()
 
     def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename):
         self.total_clips = len(parsed_ranges)
-        self.start_time = None
-        
+        self.start_time = time.time()
+
         try:
             for i, (start_time_str, end_time_str) in enumerate(parsed_ranges, 1):
                 if not self.processing_active:
@@ -181,8 +172,23 @@ class MainUI:
                 output_filename = f"Clip_{i}_{original_filename}.mp4"
                 output_path = os.path.join(output_location, output_filename)
 
-                # Update progress at the start of processing each clip
-                self.update_progress(i, self.total_clips, 0)
+                # Create a closure to handle progress updates for current clip
+                def progress_handler(progress):
+                    if self.processing_active:
+                        clip_progress = ((i - 1) * 100 + progress) / self.total_clips
+                        self.progress_bar["value"] = clip_progress
+
+                        # Calculate time remaining
+                        elapsed_time = time.time() - self.start_time
+                        if clip_progress > 0:
+                            total_time = (elapsed_time * 100) / clip_progress
+                            remaining_time = total_time - elapsed_time
+                            elapsed_str = str(timedelta(seconds=int(elapsed_time)))
+                            remaining_str = str(timedelta(seconds=int(remaining_time)))
+                            self.time_text.set(f"Elapsed: {elapsed_str} | Remaining: {remaining_str}")
+
+                        self.progress_text.set(f"Processing clip {i}/{self.total_clips} ({clip_progress:.1f}%)")
+                        self.root.update_idletasks()
 
                 success, error_message = cut_video_segment(
                     source_video,
@@ -191,7 +197,8 @@ class MainUI:
                     end_time_str,
                     lossless,
                     intro_clip if self.use_intro.get() else None,
-                    outro_clip if self.use_outro.get() else None
+                    outro_clip if self.use_outro.get() else None,
+                    progress_callback=progress_handler  # Add this parameter
                 )
 
                 if not success:
@@ -200,42 +207,47 @@ class MainUI:
                     self.root.after(0, self.stop_processing)
                     return
 
-                # Update progress after completing each clip
-                self.update_progress(i, self.total_clips, 100)
-
             self.processing_active = False
             self.root.after(0, self.stop_processing)
             messagebox.showinfo("Success", "Video clipping completed!")
-            
+
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred: {e}")
             self.processing_active = False
             self.root.after(0, self.stop_processing)
 
-    # [Rest of the methods remain the same as in the original UI class]
     def browse_source_video(self):
         file = filedialog.askopenfile(title="Select Source Video", mode="r")
         if file:
-            filename = file.name
-            self.source_video_path.set(filename)
-            self.update_file_history(filename, self.source_video_history)
+            filename = os.path.basename(file.name)
+            dirname = os.path.dirname(file.name)
+            self.source_video_path.set(file.name)
+            self.source_video_filename.set(filename)
+            self.source_video_dir.set(dirname)
+            self.update_file_history(file.name, self.source_video_history)
             self.source_video_combo['values'] = self.source_video_history
 
     def browse_intro_clip(self):
         file = filedialog.askopenfile(title="Select Intro Clip", mode="r")
         if file:
-            filename = file.name
-            self.intro_clip_path.set(filename)
-            self.update_file_history(filename, self.source_video_history)
-            self.intro_combo['values'] = self.source_video_history
+            filename = os.path.basename(file.name)
+            dirname = os.path.dirname(file.name)
+            self.intro_clip_path.set(file.name)
+            self.intro_clip_filename.set(filename)
+            self.intro_clip_dir.set(dirname)
+            self.update_file_history(file.name, self.intro_clip_history)
+            self.intro_combo['values'] = self.intro_clip_history
 
     def browse_outro_clip(self):
         file = filedialog.askopenfile(title="Select Outro Clip", mode="r")
         if file:
-            filename = file.name
-            self.outro_clip_path.set(filename)
-            self.update_file_history(filename, self.source_video_history)
-            self.outro_combo['values'] = self.source_video_history
+            filename = os.path.basename(file.name)
+            dirname = os.path.dirname(file.name)
+            self.outro_clip_path.set(file.name)
+            self.outro_clip_filename.set(filename)
+            self.outro_clip_dir.set(dirname)
+            self.update_file_history(file.name, self.outro_clip_history)
+            self.outro_combo['values'] = self.outro_clip_history
 
     def browse_output_location(self):
         folder_selected = filedialog.askdirectory(title="Select Output Location")
@@ -249,16 +261,26 @@ class MainUI:
         self.intro_button.config(state="normal" if self.use_intro.get() else "disabled")
         if not self.use_intro.get():
             self.intro_clip_path.set("")
+            self.intro_clip_filename.set("")
+            self.intro_clip_dir.set("")
 
         self.outro_combo.config(state="normal" if self.use_outro.get() else "disabled")
         self.outro_button.config(state="normal" if self.use_outro.get() else "disabled")
         if not self.use_outro.get():
             self.outro_clip_path.set("")
+            self.outro_clip_filename.set("")
+            self.outro_clip_dir.set("")
 
     def clear_fields(self):
         self.source_video_path.set("")
+        self.source_video_filename.set("")
+        self.source_video_dir.set("")
         self.intro_clip_path.set("")
+        self.intro_clip_filename.set("")
+        self.intro_clip_dir.set("")
         self.outro_clip_path.set("")
+        self.outro_clip_filename.set("")
+        self.outro_clip_dir.set("")
         self.time_ranges_text.delete("1.0", tk.END)
         self.output_location.set("")
         self.quality_var.set("Compressed")
@@ -281,12 +303,30 @@ class MainUI:
             with open(self.config_file, 'r') as f:
                 config = json.load(f)
                 self.source_video_history = config.get('source_video_history', [])
+                self.intro_clip_history = config.get('intro_clip_history', [])
+                self.outro_clip_history = config.get('outro_clip_history', [])
                 self.output_location_history = config.get('output_location_history', [])
-                self.source_video_combo['values'] = self.source_video_history
+
+                self.source_video_combo['values'] = [os.path.basename(p) for p in self.source_video_history]
+                self.intro_combo['values'] = [os.path.basename(p) for p in self.intro_clip_history]
+                self.outro_combo['values'] = [os.path.basename(p) for p in self.outro_clip_history]
                 self.output_combo['values'] = self.output_location_history
+
                 self.source_video_path.set(config.get('source_video_path', ''))
+                if self.source_video_path.get():
+                    self.source_video_filename.set(os.path.basename(self.source_video_path.get()))
+                    self.source_video_dir.set(os.path.dirname(self.source_video_path.get()))
+
                 self.intro_clip_path.set(config.get('intro_clip_path', ''))
+                if self.intro_clip_path.get():
+                    self.intro_clip_filename.set(os.path.basename(self.intro_clip_path.get()))
+                    self.intro_clip_dir.set(os.path.dirname(self.intro_clip_path.get()))
+
                 self.outro_clip_path.set(config.get('outro_clip_path', ''))
+                if self.outro_clip_path.get():
+                    self.outro_clip_filename.set(os.path.basename(self.outro_clip_path.get()))
+                    self.outro_clip_dir.set(os.path.dirname(self.outro_clip_path.get()))
+
                 self.use_intro.set(config.get('use_intro', False))
                 self.use_outro.set(config.get('use_outro', False))
                 self.toggle_intro_outro()
@@ -302,6 +342,8 @@ class MainUI:
     def save_settings(self):
         config = {
             'source_video_history': self.source_video_history,
+            'intro_clip_history': self.intro_clip_history,
+            'outro_clip_history': self.outro_clip_history,
             'output_location_history': self.output_location_history,
             'source_video_path': self.source_video_path.get(),
             'intro_clip_path': self.intro_clip_path.get(),
