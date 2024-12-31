@@ -31,15 +31,16 @@ class MainUI:
         self.main_frame = ttk.Frame(root, padding="20", style='Modern.TFrame')
         self.main_frame.grid(row=0, column=0, sticky="nsew")
 
-        # Configure grid weights
-        root.grid_rowconfigure(0, weight=1)
-        root.grid_columnconfigure(0, weight=1)
-        self.main_frame.grid_columnconfigure(1, weight=1)
+        # Configure grid weights for the main frame
+        self.main_frame.grid_columnconfigure(0, weight=1, uniform="group1")  # Video Settings column
+        self.main_frame.grid_columnconfigure(1, weight=1, uniform="group1")  # Output Settings column
+        self.main_frame.grid_rowconfigure(1, weight=1) # Time Ranges row
+        self.main_frame.grid_rowconfigure(2, weight=0) # Progress row
 
         # Create sections
         self.create_video_section()
-        self.create_time_section()
         self.create_output_section()
+        self.create_time_section()
         self.create_progress_section()
 
         # Initialize processing variables
@@ -64,7 +65,7 @@ class MainUI:
     def create_video_section(self):
         # Source Video Frame
         video_frame = ttk.LabelFrame(self.main_frame, text="Video Settings", padding="10")
-        video_frame.grid(row=0, column=0, columnspan=3, sticky="nsew", pady=(0, 10))
+        video_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=(0, 10)) # Added padx
 
         # Source Video
         ttk.Label(video_frame, text="Source Video:", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
@@ -100,20 +101,10 @@ class MainUI:
         self.outro_button.grid(row=4, column=2, padx=5)
         ttk.Label(video_frame, textvariable=self.outro_clip_dir, style='Italic.TLabel').grid(row=5, column=1, sticky="ew", padx=5)
 
-    def create_time_section(self):
-        # Time Range Frame
-        time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
-        time_frame.grid(row=1, column=0, columnspan=3, sticky="nsew", pady=10)
-
-        ttk.Label(time_frame, text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
-        self.time_ranges_text = tk.Text(time_frame, height=5, wrap=tk.WORD)
-        self.time_ranges_text.grid(row=1, column=0, sticky="nsew", pady=5)
-        self.time_ranges_text.configure(font=('Helvetica', 10))
-
     def create_output_section(self):
         # Output Frame
         output_frame = ttk.LabelFrame(self.main_frame, text="Output Settings", padding="10")
-        output_frame.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=10)
+        output_frame.grid(row=0, column=1, sticky="nsew", pady=(0, 10)) # Added padx
 
         # Output Location
         ttk.Label(output_frame, text="Output Location:", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
@@ -128,10 +119,21 @@ class MainUI:
         ttk.Radiobutton(output_frame, text="Lossless", variable=self.quality_var, value="Lossless").grid(row=1, column=1, sticky="w")
         ttk.Radiobutton(output_frame, text="Compressed", variable=self.quality_var, value="Compressed").grid(row=1, column=2, sticky="w")
 
+    def create_time_section(self):
+        # Time Range Frame
+        time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
+        time_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=10, padx=0) # Adjusted columnspan and padx
+        time_frame.grid_columnconfigure(0, weight=1) # Make the content expand
+
+        ttk.Label(time_frame, text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):", style='Modern.TLabel').grid(row=0, column=0, sticky="ew", pady=5)
+        self.time_ranges_text = tk.Text(time_frame, height=5, wrap=tk.WORD)
+        self.time_ranges_text.grid(row=1, column=0, sticky="nsew", pady=5)
+        self.time_ranges_text.configure(font=('Helvetica', 10))
+
     def create_progress_section(self):
         # Progress Frame
         progress_frame = ttk.LabelFrame(self.main_frame, text="Progress", padding="10")
-        progress_frame.grid(row=3, column=0, columnspan=3, sticky="nsew", pady=10)
+        progress_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(5, 10), padx=0) # Adjusted pady
 
         # Progress Labels
         self.progress_text = tk.StringVar(value="Ready to process...")
@@ -142,7 +144,7 @@ class MainUI:
 
         # Progress Bar
         self.progress_bar = ttk.Progressbar(progress_frame, orient="horizontal", mode="determinate")
-        self.progress_bar.grid(row=2, column=0, columnspan=3, sticky="ew", pady=10)
+        self.progress_bar.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(0, 5)) # Adjusted pady
 
         # Buttons Frame
         button_frame = ttk.Frame(progress_frame)
@@ -161,7 +163,7 @@ class MainUI:
         try:
             for i, (start_time_str, end_time_str) in enumerate(parsed_ranges, 1):
                 if not self.processing_active:
-                    return
+                    return  # Exit if processing is stopped
 
                 if not validate_time_range(start_time_str, end_time_str, get_video_duration(source_video)):
                     messagebox.showerror("Error", f"Invalid time range: {start_time_str}-{end_time_str}")
@@ -225,7 +227,7 @@ class MainUI:
             self.source_video_filename.set(filename)
             self.source_video_dir.set(dirname)
             self.update_file_history(file.name, self.source_video_history)
-            self.source_video_combo['values'] = self.source_video_history
+            self.source_video_combo['values'] = [os.path.basename(p) for p in self.source_video_history]
 
     def browse_intro_clip(self):
         file = filedialog.askopenfile(title="Select Intro Clip", mode="r")
@@ -236,7 +238,7 @@ class MainUI:
             self.intro_clip_filename.set(filename)
             self.intro_clip_dir.set(dirname)
             self.update_file_history(file.name, self.intro_clip_history)
-            self.intro_combo['values'] = self.intro_clip_history
+            self.intro_combo['values'] = [os.path.basename(p) for p in self.intro_clip_history]
 
     def browse_outro_clip(self):
         file = filedialog.askopenfile(title="Select Outro Clip", mode="r")
@@ -247,7 +249,7 @@ class MainUI:
             self.outro_clip_filename.set(filename)
             self.outro_clip_dir.set(dirname)
             self.update_file_history(file.name, self.outro_clip_history)
-            self.outro_combo['values'] = self.outro_clip_history
+            self.outro_combo['values'] = [os.path.basename(p) for p in self.outro_clip_history]
 
     def browse_output_location(self):
         folder_selected = filedialog.askdirectory(title="Select Output Location")
@@ -421,6 +423,7 @@ class MainUI:
         self.processing_active = True
         self.progress_text.set("Initializing...")
         self.time_text.set("Calculating time remaining...")
+        self.start_stop_button.config(state=tk.NORMAL)  # Ensure button is enabled
 
         original_filename = os.path.splitext(os.path.basename(source_video))[0]
 
@@ -440,6 +443,7 @@ class MainUI:
         self.start_stop_button.config(text="Start Processing")
         self.progress_text.set("Processing stopped")
         self.time_text.set("Estimated time remaining: --:--")
+        self.progress_bar["value"] = 0
         self.start_time = None
 
 def create_ui(root):
