@@ -26,17 +26,17 @@ class MainUI:
         style.configure('Title.TLabel', font=('Helvetica', 12, 'bold'))
         style.configure('Bold.TLabel', font=('Helvetica', 10, 'bold'))
         style.configure('Italic.TLabel', font=('Helvetica', 8, 'italic'))
+        style.configure('Small.TLabel', font=('Helvetica', 8))  # Style for explanatory text
 
         # Main frame with padding
         self.main_frame = ttk.Frame(root, padding="20", style='Modern.TFrame')
         self.main_frame.grid(row=0, column=0, sticky="nsew")
 
          # Configure grid weights for the main frame
-        self.main_frame.grid_columnconfigure(0, weight=2)  # Video Settings column
+        self.main_frame.grid_columnconfigure(0, weight=1)  # Video Settings column
         self.main_frame.grid_columnconfigure(1, weight=1)  # Output Settings column
         self.main_frame.grid_rowconfigure(1, weight=1)  # Time/Progress row
         self.main_frame.grid_rowconfigure(2, weight=0) # Button row
-
 
         # Create sections
         self.create_video_section()
@@ -67,6 +67,7 @@ class MainUI:
         # Source Video Frame
         video_frame = ttk.LabelFrame(self.main_frame, text="Video Settings", padding="10")
         video_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5), pady=(0, 10)) # Adjusted padx
+        video_frame.grid_columnconfigure(1, weight=1)
 
         # Source Video
         ttk.Label(video_frame, text="Source Video:", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
@@ -120,6 +121,12 @@ class MainUI:
         ttk.Radiobutton(output_frame, text="Lossless", variable=self.quality_var, value="Lossless").grid(row=1, column=1, sticky="w")
         ttk.Radiobutton(output_frame, text="Compressed", variable=self.quality_var, value="Compressed").grid(row=1, column=2, sticky="w")
 
+        # Quality explanation
+        self.quality_explanation = ttk.Label(output_frame, text="Lossless: Preserves the original video quality, resulting in larger file sizes. \nCompressed: Reduces file size by sacrificing some video quality.", style='Small.TLabel', wraplength=250)
+        self.quality_explanation.grid(row=2, column=0, columnspan=3, sticky="w", pady=5)
+
+
+
     def create_time_section(self):
          # Time Range Frame
         time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
@@ -142,7 +149,6 @@ class MainUI:
         time_scrollbar = ttk.Scrollbar(time_text_frame, orient="vertical", command=self.time_ranges_text.yview)
         time_scrollbar.grid(row=0, column=1, sticky="ns")
         self.time_ranges_text.config(yscrollcommand=time_scrollbar.set)
-
 
     def create_progress_section(self):
         # Progress Frame
