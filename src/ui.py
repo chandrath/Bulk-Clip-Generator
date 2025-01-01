@@ -3,13 +3,12 @@ import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import os
 import re
-from video_processing import cut_video_segment, get_video_duration, validate_time_range
+from video_processing import cut_video_segment, get_video_duration, validate_time_range, terminate_current_process
 import threading
 import json
 import time
 from datetime import datetime, timedelta
 import webbrowser
-
 
 class MainUI:
     def __init__(self, root):
@@ -39,7 +38,6 @@ class MainUI:
         self.main_frame.grid_columnconfigure(1, weight=1)  # Output Settings column
         self.main_frame.grid_rowconfigure(1, weight=1)  # Time/Progress row
         self.main_frame.grid_rowconfigure(2, weight=0) # Button row
-
 
         # Create sections
         self.create_video_section()
@@ -133,7 +131,7 @@ class MainUI:
         time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
         time_frame.grid(row=1, column=0, sticky="nsew", pady=10, padx=(0,5)) # Adjusted columnspan and padx
         time_frame.grid_columnconfigure(0, weight=1)  # Make the time frame expand
-        
+
         # Create a frame to contain the text widget and scrollbar
         time_text_frame = ttk.Frame(time_frame)
         time_text_frame.grid(row=1, column=0, sticky="nsew", pady=5)
@@ -179,6 +177,13 @@ class MainUI:
         self.show_output_button = ttk.Button(button_frame, text="Show Output Folder", command=self.show_output_folder, style='Modern.TButton')
         self.show_output_button.grid(row=0, column=1, padx=5)
 
+    def show_error(self, message):
+        """Thread-safe error message display"""
+        self.root.after(0, lambda: messagebox.showerror("Error", message))
+
+    def show_info(self, message):
+        """Thread-safe info message display"""
+        self.root.after(0, lambda: messagebox.showinfo("Information", message))
 
     def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename):
         self.total_clips = len(parsed_ranges)
@@ -190,7 +195,8 @@ class MainUI:
                     return  # Exit if processing is stopped
 
                 if not validate_time_range(start_time_str, end_time_str, get_video_duration(source_video)):
-                    messagebox.showerror("Error", f"Invalid time range: {start_time_str}-{end_time_str}")
+                    error_msg = f"Invalid time range: {start_time_str}-{end_time_str}"
+                    self.show_error(error_msg)
                     self.processing_active = False
                     self.root.after(0, self.stop_processing)
                     return
@@ -198,23 +204,10 @@ class MainUI:
                 output_filename = f"Clip_{i}_{original_filename}.mp4"
                 output_path = os.path.join(output_location, output_filename)
 
-                # Create a closure to handle progress updates for current clip
                 def progress_handler(progress):
                     if self.processing_active:
                         clip_progress = ((i - 1) * 100 + progress) / self.total_clips
-                        self.progress_bar["value"] = clip_progress
-
-                        # Calculate time remaining
-                        elapsed_time = time.time() - self.start_time
-                        if clip_progress > 0:
-                            total_time = (elapsed_time * 100) / clip_progress
-                            remaining_time = total_time - elapsed_time
-                            elapsed_str = str(timedelta(seconds=int(elapsed_time)))
-                            remaining_str = str(timedelta(seconds=int(remaining_time)))
-                            self.time_text.set(f"Elapsed: {elapsed_str} | Remaining: {remaining_str}")
-
-                        self.progress_text.set(f"Processing clip {i}/{self.total_clips} ({clip_progress:.1f}%)")
-                        self.root.update_idletasks()
+                        self.root.after(0, lambda p=clip_progress: self.update_progress(p))
 
                 success, error_message = cut_video_segment(
                     source_video,
@@ -224,24 +217,44 @@ class MainUI:
                     lossless,
                     intro_clip if self.use_intro.get() else None,
                     outro_clip if self.use_outro.get() else None,
-                    progress_callback=progress_handler  # Add this parameter
+                    progress_callback=progress_handler
                 )
 
                 if not success:
-                    messagebox.showerror("Error", f"Error processing clip {i}: {error_message}")
+                    if error_message == "Processing was stopped by user":
+                        return  # Exit quietly if processing was stopped by user
+                    self.show_error(f"Error processing clip {i}: {error_message}")
                     self.processing_active = False
                     self.root.after(0, self.stop_processing)
                     return
 
-            self.processing_active = False
-            self.root.after(0, self.stop_processing)
-            messagebox.showinfo("Success", "Video clipping completed!")
+                if not self.processing_active:
+                    return  # Check again after each clip
+
+            if self.processing_active:  # Only show completion message if not stopped
+                self.show_info("Video clipping completed!")
 
         except Exception as e:
-            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+            self.show_error(f"An unexpected error occurred: {str(e)}")
+        finally:
             self.processing_active = False
             self.root.after(0, self.stop_processing)
 
+    def update_progress(self, progress):
+        """Update progress bar and time estimates"""
+        self.progress_bar["value"] = progress
+
+        # Calculate time remaining
+        elapsed_time = time.time() - self.start_time
+        if progress > 0:
+            total_time = (elapsed_time * 100) / progress
+            remaining_time = total_time - elapsed_time
+            elapsed_str = str(timedelta(seconds=int(elapsed_time)))
+            remaining_str = str(timedelta(seconds=int(remaining_time)))
+            self.time_text.set(f"Elapsed: {elapsed_str} | Remaining: {remaining_str}")
+
+        self.progress_text.set(f"Processing clip {int((progress * self.total_clips / 100)) + 1}/{self.total_clips} ({progress:.1f}%)")
+        self.root.update_idletasks()
 
     def browse_source_video(self):
         file = filedialog.askopenfile(title="Select Source Video", mode="r")
@@ -282,7 +295,7 @@ class MainUI:
             self.output_location.set(folder_selected)
             self.update_file_history(folder_selected, self.output_location_history)
             self.output_combo['values'] = self.output_location_history
-    
+
     def show_output_folder(self):
         output_location = self.output_location.get()
         if output_location and os.path.exists(output_location):
@@ -407,6 +420,16 @@ class MainUI:
         else:
             self.start_processing()
 
+    def stop_processing(self):
+        if self.processing_active:
+            self.processing_active = False
+            terminate_current_process()
+            self.start_stop_button.config(text="Start Processing")
+            self.progress_text.set("Processing stopped")
+            self.time_text.set("Estimated time remaining: --:--")
+            self.progress_bar["value"] = 0
+            self.start_time = None
+
     def start_processing(self):
         if self.processing_active:
             messagebox.showinfo("Processing", "A processing task is already active.")
@@ -422,19 +445,19 @@ class MainUI:
 
         # Validate inputs
         if not source_video or not os.path.exists(source_video):
-            messagebox.showerror("Error", "Please select a valid source video file.")
+            self.show_error("Please select a valid source video file.")
             return
         if self.use_intro.get() and (not intro_clip or not os.path.exists(intro_clip)):
-            messagebox.showerror("Error", "Please select a valid intro clip file.")
+            self.show_error("Please select a valid intro clip file.")
             return
         if self.use_outro.get() and (not outro_clip or not os.path.exists(outro_clip)):
-            messagebox.showerror("Error", "Please select a valid outro clip file.")
+            self.show_error("Please select a valid outro clip file.")
             return
         if not output_location or not os.path.exists(output_location):
-            messagebox.showerror("Error", "Please select a valid output location.")
+            self.show_error("Please select a valid output location.")
             return
         if not time_ranges_text:
-            messagebox.showerror("Error", "Please enter time ranges.")
+            self.show_error("Please enter time ranges.")
             return
 
         # Parse time ranges
@@ -446,7 +469,7 @@ class MainUI:
                 start_time_str, end_time_str = match.groups()
                 parsed_ranges.append((start_time_str, end_time_str))
             else:
-                messagebox.showerror("Error", f"Invalid time range format: {range_str.strip()}")
+                self.show_error(f"Invalid time range format: {range_str.strip()}")
                 return
 
         # Start processing
@@ -469,14 +492,6 @@ class MainUI:
             lossless,
             original_filename
         )).start()
-
-    def stop_processing(self):
-        self.processing_active = False
-        self.start_stop_button.config(text="Start Processing")
-        self.progress_text.set("Processing stopped")
-        self.time_text.set("Estimated time remaining: --:--")
-        self.progress_bar["value"] = 0
-        self.start_time = None
 
 def create_ui(root):
     return MainUI(root)

@@ -1,11 +1,15 @@
-# video_processing.py
 import subprocess
 import os
 import sys
 from tempfile import mkdtemp
 import shutil
 
+# Global variable to store current FFmpeg process
+current_process = None
+
 def run_ffmpeg_command(command_args, is_ffprobe=False):
+    global current_process
+    
     if getattr(sys, 'frozen', False):
         base_path = sys._MEIPASS
     else:
@@ -17,25 +21,78 @@ def run_ffmpeg_command(command_args, is_ffprobe=False):
     if not os.path.exists(ffmpeg_path):
         raise FileNotFoundError(f"{executable} not found at {ffmpeg_path}")
 
+    # Log the command being run for debugging
     full_command = [ffmpeg_path] + command_args
-    process = subprocess.Popen(full_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-    return stdout, stderr, process.returncode
+    
+    try:
+        current_process = subprocess.Popen(
+            full_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            startupinfo=None if is_ffprobe else subprocess.STARTUPINFO()
+        )
+        stdout, stderr = current_process.communicate()
+        return_code = current_process.returncode
+        current_process = None  # Clear the reference after process completes
+        return stdout, stderr, return_code
+    except Exception as e:
+        if current_process:
+            current_process = None
+        raise RuntimeError(f"Failed to execute {executable}: {str(e)}")
+
+def terminate_current_process():
+    global current_process
+    if current_process and current_process.poll() is None:
+        try:
+            current_process.terminate()
+            current_process.wait(timeout=5)  # Wait up to 5 seconds for graceful termination
+        except subprocess.TimeoutExpired:
+            current_process.kill()  # Force kill if process doesn't terminate gracefully
+        current_process = None
+        return True
+    return False
 
 def get_video_duration(video_path):
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+
     command = [
         "-v", "error",
-        "-show_entries", "format=duration",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=duration",
         "-of", "default=noprint_wrappers=1:nokey=1",
         video_path
     ]
+
     try:
         stdout, stderr, returncode = run_ffmpeg_command(command, is_ffprobe=True)
-        if returncode == 0:
-            return float(stdout.decode().strip())
-        raise ValueError(f"Error determining duration: {stderr.decode().strip()}")
+        
+        if returncode != 0:
+            # Try alternative method if first method fails
+            command = [
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                video_path
+            ]
+            stdout, stderr, returncode = run_ffmpeg_command(command, is_ffprobe=True)
+
+        if returncode != 0:
+            stderr_text = stderr.decode().strip() if stderr else "Unknown error"
+            raise ValueError(f"FFprobe error (code {returncode}): {stderr_text}")
+
+        duration_str = stdout.decode().strip()
+        if not duration_str:
+            raise ValueError("No duration information found in video file")
+
+        return float(duration_str)
+
+    except ValueError as ve:
+        raise RuntimeError(f"Failed to get video duration: {str(ve)}")
     except Exception as e:
-        raise RuntimeError(f"Failed to get video duration for {video_path}: {e}")
+        raise RuntimeError(f"Failed to get video duration: {str(e)}")
+
+# [Rest of the file remains unchanged...]
 
 def normalize_video(input_file, output_file, lossless=False):
     """Normalize video to a consistent format for concatenation"""
@@ -62,7 +119,7 @@ def normalize_video(input_file, output_file, lossless=False):
     ])
 
     stdout, stderr, returncode = run_ffmpeg_command(command)
-    if returncode != 0:
+    if returncode != 0 and returncode != -1:  # -1 indicates process was terminated
         raise RuntimeError(f"Error normalizing video: {stderr.decode().strip()}")
     return returncode == 0
 
@@ -92,8 +149,10 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
         ]
 
         stdout, stderr, returncode = run_ffmpeg_command(cut_command)
-        if returncode != 0:
+        if returncode != 0 and returncode != -1:
             raise RuntimeError(f"Error cutting main segment: {stderr.decode().strip()}")
+        if returncode == -1:  # Process was terminated
+            return False, "Processing was stopped by user"
         temp_files.append(temp_main)
 
         # After cutting main segment:
@@ -108,6 +167,8 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
             if normalize_video(intro_path, temp_intro, lossless):
                 concat_list.append(temp_intro)
                 temp_files.append(temp_intro)
+            elif current_process is None:  # Process was terminated
+                return False, "Processing was stopped by user"
 
         concat_list.append(temp_main)
 
@@ -116,6 +177,8 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
             if normalize_video(outro_path, temp_outro, lossless):
                 concat_list.append(temp_outro)
                 temp_files.append(temp_outro)
+            elif current_process is None:  # Process was terminated
+                return False, "Processing was stopped by user"
 
         # After normalizing intro/outro:
         if progress_callback:
@@ -145,8 +208,10 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
         ]
 
         stdout, stderr, returncode = run_ffmpeg_command(concat_command)
-        if returncode != 0:
+        if returncode != 0 and returncode != -1:
             raise RuntimeError(f"Error concatenating clips: {stderr.decode().strip()}")
+        if returncode == -1:  # Process was terminated
+            return False, "Processing was stopped by user"
 
         # After final concatenation:
         if progress_callback:
