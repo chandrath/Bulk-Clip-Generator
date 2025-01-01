@@ -1,4 +1,5 @@
 # ui.py
+# ui.py
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import os
@@ -28,6 +29,15 @@ class MainUI:
         style.configure('Bold.TLabel', font=('Helvetica', 10, 'bold'))
         style.configure('Italic.TLabel', font=('Helvetica', 8, 'italic'))
         style.configure('Small.TLabel', font=('Helvetica', 8))  # Style for explanatory text
+
+        # Configure button colors
+        style.configure('Success.Modern.TButton', foreground='white', background='green')
+        style.map('Success.Modern.TButton',
+            background=[('active', '!disabled', 'dark green')])
+
+        style.configure('Danger.Modern.TButton', foreground='white', background='red')
+        style.map('Danger.Modern.TButton',
+            background=[('active', '!disabled', 'dark red')])
 
         # Main frame with padding
         self.main_frame = ttk.Frame(root, padding="20", style='Modern.TFrame')
@@ -171,7 +181,7 @@ class MainUI:
         button_frame.grid(row=3, column=0, columnspan=3, pady=10)
 
         # Process, Clear and Show Output Folder Buttons
-        self.start_stop_button = ttk.Button(button_frame, text="Start Processing", command=self.toggle_processing, style='Modern.TButton')
+        self.start_stop_button = ttk.Button(button_frame, text="Start Processing", command=self.toggle_processing, style='Success.Modern.TButton')
         self.start_stop_button.grid(row=0, column=0, padx=5)
 
         self.show_output_button = ttk.Button(button_frame, text="Show Output Folder", command=self.show_output_folder, style='Modern.TButton')
@@ -337,6 +347,7 @@ class MainUI:
         self.progress_text.set("Ready to process...")
         self.time_text.set("Estimated time remaining: --:--")
         self.progress_bar["value"] = 0
+        self.start_stop_button.config(text="Start Processing", style='Success.Modern.TButton') # Reset button on clear
 
     def update_file_history(self, filepath, history_list):
         if filepath in history_list:
@@ -424,7 +435,7 @@ class MainUI:
         if self.processing_active:
             self.processing_active = False
             terminate_current_process()
-            self.start_stop_button.config(text="Start Processing")
+            self.start_stop_button.config(text="Start Processing", style='Success.Modern.TButton')
             self.progress_text.set("Processing stopped")
             self.time_text.set("Estimated time remaining: --:--")
             self.progress_bar["value"] = 0
@@ -473,7 +484,7 @@ class MainUI:
                 return
 
         # Start processing
-        self.start_stop_button.config(text="Stop Processing")
+        self.start_stop_button.config(text="Stop Processing", style='Danger.Modern.TButton')
         self.progress_bar["value"] = 0
         self.processing_active = True
         self.progress_text.set("Initializing...")
