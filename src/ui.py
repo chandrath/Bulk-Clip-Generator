@@ -1,5 +1,6 @@
 # ui.py
 # ui.py
+# ui.py
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import os
@@ -198,6 +199,7 @@ class MainUI:
     def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename):
         self.total_clips = len(parsed_ranges)
         self.start_time = time.time()
+        self.processed_clips = 0  # Reset processed clips counter
 
         try:
             for i, (start_time_str, end_time_str) in enumerate(parsed_ranges, 1):
@@ -207,7 +209,6 @@ class MainUI:
                 if not validate_time_range(start_time_str, end_time_str, get_video_duration(source_video)):
                     error_msg = f"Invalid time range: {start_time_str}-{end_time_str}"
                     self.show_error(error_msg)
-                    self.processing_active = False
                     self.root.after(0, self.stop_processing)
                     return
 
@@ -234,20 +235,19 @@ class MainUI:
                     if error_message == "Processing was stopped by user":
                         return  # Exit quietly if processing was stopped by user
                     self.show_error(f"Error processing clip {i}: {error_message}")
-                    self.processing_active = False
                     self.root.after(0, self.stop_processing)
                     return
 
+                self.processed_clips += 1
                 if not self.processing_active:
                     return  # Check again after each clip
 
             if self.processing_active:  # Only show completion message if not stopped
-                self.show_info("Video clipping completed!")
+                self.root.after(0, lambda: self.show_info("Video clipping completed!"))
 
         except Exception as e:
             self.show_error(f"An unexpected error occurred: {str(e)}")
         finally:
-            self.processing_active = False
             self.root.after(0, self.stop_processing)
 
     def update_progress(self, progress):
@@ -263,7 +263,7 @@ class MainUI:
             remaining_str = str(timedelta(seconds=int(remaining_time)))
             self.time_text.set(f"Elapsed: {elapsed_str} | Remaining: {remaining_str}")
 
-        self.progress_text.set(f"Processing clip {int((progress * self.total_clips / 100)) + 1}/{self.total_clips} ({progress:.1f}%)")
+        self.progress_text.set(f"Processing clip {self.processed_clips + 1}/{self.total_clips} ({progress:.1f}%)")
         self.root.update_idletasks()
 
     def browse_source_video(self):

@@ -1,16 +1,18 @@
 # video_processing.py
+# video_processing.py
 import subprocess
 import os
 import sys
 from tempfile import mkdtemp
 import shutil
+import signal
 
 # Global variable to store current FFmpeg process
 current_process = None
 
 def run_ffmpeg_command(command_args, is_ffprobe=False):
     global current_process
-    
+
     if getattr(sys, 'frozen', False):
         base_path = sys._MEIPASS
     else:
@@ -24,7 +26,7 @@ def run_ffmpeg_command(command_args, is_ffprobe=False):
 
     # Log the command being run for debugging
     full_command = [ffmpeg_path] + command_args
-    
+
     try:
         current_process = subprocess.Popen(
             full_command,
@@ -32,14 +34,22 @@ def run_ffmpeg_command(command_args, is_ffprobe=False):
             stderr=subprocess.PIPE,
             startupinfo=None if is_ffprobe else subprocess.STARTUPINFO()
         )
-        stdout, stderr = current_process.communicate()
+        stdout, stderr = current_process.communicate(timeout=15)  # Added timeout
         return_code = current_process.returncode
-        current_process = None  # Clear the reference after process completes
         return stdout, stderr, return_code
+    except subprocess.TimeoutExpired:
+        # Process timed out, attempt to terminate gracefully
+        if current_process.poll() is None:
+            try:
+                current_process.terminate()
+                current_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                current_process.kill()
+        return None, None, -1  # Indicate process was terminated
     except Exception as e:
-        if current_process:
-            current_process = None
         raise RuntimeError(f"Failed to execute {executable}: {str(e)}")
+    finally:
+        current_process = None  # Ensure process is cleared
 
 def terminate_current_process():
     global current_process
@@ -49,7 +59,10 @@ def terminate_current_process():
             current_process.wait(timeout=5)  # Wait up to 5 seconds for graceful termination
         except subprocess.TimeoutExpired:
             current_process.kill()  # Force kill if process doesn't terminate gracefully
-        current_process = None
+        except Exception as e:
+            print(f"Error terminating process: {e}")
+        finally:
+            current_process = None
         return True
     return False
 
@@ -67,7 +80,7 @@ def get_video_duration(video_path):
 
     try:
         stdout, stderr, returncode = run_ffmpeg_command(command, is_ffprobe=True)
-        
+
         if returncode != 0:
             # Try alternative method if first method fails
             command = [
@@ -92,8 +105,6 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Failed to get video duration: {str(ve)}")
     except Exception as e:
         raise RuntimeError(f"Failed to get video duration: {str(e)}")
-
-# [Rest of the file remains unchanged...]
 
 def normalize_video(input_file, output_file, lossless=False):
     """Normalize video to a consistent format for concatenation"""
@@ -151,7 +162,10 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
 
         stdout, stderr, returncode = run_ffmpeg_command(cut_command)
         if returncode != 0 and returncode != -1:
-            raise RuntimeError(f"Error cutting main segment: {stderr.decode().strip()}")
+            # Only show actual error messages, not progress output
+            error_lines = stderr.decode().strip().split('\n')
+            error_message = next((line for line in reversed(error_lines) if 'error' in line.lower()), 'Unknown error occurred')
+            raise RuntimeError(error_message)
         if returncode == -1:  # Process was terminated
             return False, "Processing was stopped by user"
         temp_files.append(temp_main)
@@ -210,7 +224,10 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
 
         stdout, stderr, returncode = run_ffmpeg_command(concat_command)
         if returncode != 0 and returncode != -1:
-            raise RuntimeError(f"Error concatenating clips: {stderr.decode().strip()}")
+            # Only show actual error messages, not progress output
+            error_lines = stderr.decode().strip().split('\n')
+            error_message = next((line for line in reversed(error_lines) if 'error' in line.lower()), 'Unknown error occurred')
+            raise RuntimeError(error_message)
         if returncode == -1:  # Process was terminated
             return False, "Processing was stopped by user"
 
