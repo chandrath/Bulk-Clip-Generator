@@ -1,6 +1,4 @@
 # ui.py
-# ui.py
-# ui.py
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import os
@@ -11,6 +9,7 @@ import json
 import time
 from datetime import datetime, timedelta
 import webbrowser
+from gpu_utils import GPUDetector
 
 class MainUI:
     def __init__(self, root):
@@ -71,6 +70,12 @@ class MainUI:
         self.outro_clip_history = []
         self.output_location_history = []
         self.load_settings()
+
+        # Initialize GPU detection
+        self.gpu_detector = GPUDetector()
+        self.hw_accel_vars = {}
+        for _, codec in self.gpu_detector.get_available_encoders():
+            self.hw_accel_vars[codec] = tk.BooleanVar(value=False)
 
         # Bind window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -196,7 +201,7 @@ class MainUI:
         """Thread-safe info message display"""
         self.root.after(0, lambda: messagebox.showinfo("Information", message))
 
-    def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename):
+    def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename, hw_encoder=None):
         self.total_clips = len(parsed_ranges)
         self.start_time = time.time()
         self.processed_clips = 0  # Reset processed clips counter
@@ -228,7 +233,8 @@ class MainUI:
                     lossless,
                     intro_clip if self.use_intro.get() else None,
                     outro_clip if self.use_outro.get() else None,
-                    progress_callback=progress_handler
+                    progress_callback=progress_handler,
+                    hw_encoder=hw_encoder
                 )
 
                 if not success:
@@ -483,6 +489,13 @@ class MainUI:
                 self.show_error(f"Invalid time range format: {range_str.strip()}")
                 return
 
+        # Get selected hardware encoder
+        hw_encoder = None
+        for codec, var in self.hw_accel_vars.items():
+            if var.get():
+                hw_encoder = codec
+                break
+
         # Start processing
         self.start_stop_button.config(text="Stop Processing", style='Danger.Modern.TButton')
         self.progress_bar["value"] = 0
@@ -501,8 +514,16 @@ class MainUI:
             outro_clip,
             output_location,
             lossless,
-            original_filename
+            original_filename,
+            hw_encoder
         )).start()
+
+    def toggle_hw_acceleration(self, codec):
+    # Ensure only one hardware acceleration option is enabled at a time
+        if self.hw_accel_vars[codec].get():
+            for other_codec in self.hw_accel_vars:
+                if other_codec != codec:
+                    self.hw_accel_vars[other_codec].set(False)
 
 def create_ui(root):
     return MainUI(root)

@@ -15,6 +15,29 @@ def create_menu(root, ui_instance=None): # Make ui_instance optional
     file_menu.add_command(label="Exit", command=root.quit)
     menubar.add_cascade(label="File", menu=file_menu)
 
+    # Settings Menu
+    settings_menu = tk.Menu(menubar, tearoff=0)
+    
+    # Hardware Acceleration Submenu
+    hw_accel_menu = tk.Menu(settings_menu, tearoff=0)
+    if ui_instance and hasattr(ui_instance, 'gpu_detector'):
+        encoders = ui_instance.gpu_detector.get_available_encoders()
+        if encoders:
+            for name, codec in encoders:
+                hw_accel_menu.add_checkbutton(
+                    label=name,
+                    variable=ui_instance.hw_accel_vars[codec],
+                    command=lambda c=codec: ui_instance.toggle_hw_acceleration(c)
+                )
+        else:
+            hw_accel_menu.add_command(
+                label="No GPU detected",
+                state="disabled"
+            )
+    settings_menu.add_cascade(label="Hardware Acceleration", menu=hw_accel_menu)
+    menubar.add_cascade(label="Settings", menu=settings_menu)
+
+
     # Help Menu
     help_menu = tk.Menu(menubar, tearoff=0)
     help_menu.add_command(label="About", command=show_about)
