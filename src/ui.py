@@ -1,6 +1,6 @@
 # ui.py
 import tkinter as tk
-from tkinter import filedialog, ttk, messagebox
+from tkinter import filedialog, ttk, messagebox, simpledialog
 import os
 import re
 from video_processing import cut_video_segment, get_video_duration, validate_time_range, terminate_current_process
@@ -10,6 +10,94 @@ import time
 from datetime import datetime, timedelta
 import webbrowser
 from gpu_utils import GPUDetector
+
+class TimeRangeSelector(tk.Toplevel):
+    def __init__(self, parent, callback):
+        super().__init__(parent)
+        self.callback = callback
+        
+        # Window setup
+        self.title("Add Time Range")
+        self.geometry("400x250")
+        self.resizable(False, False)
+        
+        # Make it modal
+        self.transient(parent)
+        self.grab_set()
+        
+        # Style configuration
+        style = ttk.Style()
+        self.configure(bg=style.lookup('TFrame', 'background'))
+        
+        # Main frame
+        main_frame = ttk.Frame(self, padding="20")
+        main_frame.grid(row=0, column=0, sticky="nsew")
+        
+        # Start time frame
+        start_frame = ttk.LabelFrame(main_frame, text="Start Time", padding="10")
+        start_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
+        
+        # Start time spinboxes
+        self.start_hour = ttk.Spinbox(start_frame, from_=0, to=99, width=3, format="%02.0f")
+        self.start_hour.grid(row=0, column=0, padx=2)
+        self.start_hour.set("00")
+        
+        ttk.Label(start_frame, text=":").grid(row=0, column=1)
+        
+        self.start_minute = ttk.Spinbox(start_frame, from_=0, to=59, width=3, format="%02.0f")
+        self.start_minute.grid(row=0, column=2, padx=2)
+        self.start_minute.set("00")
+        
+        ttk.Label(start_frame, text=":").grid(row=0, column=3)
+        
+        self.start_second = ttk.Spinbox(start_frame, from_=0, to=59, width=3, format="%02.0f")
+        self.start_second.grid(row=0, column=4, padx=2)
+        self.start_second.set("00")
+        
+        # End time frame
+        end_frame = ttk.LabelFrame(main_frame, text="End Time", padding="10")
+        end_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        
+        # End time spinboxes
+        self.end_hour = ttk.Spinbox(end_frame, from_=0, to=99, width=3, format="%02.0f")
+        self.end_hour.grid(row=0, column=0, padx=2)
+        self.end_hour.set("00")
+        
+        ttk.Label(end_frame, text=":").grid(row=0, column=1)
+        
+        self.end_minute = ttk.Spinbox(end_frame, from_=0, to=59, width=3, format="%02.0f")
+        self.end_minute.grid(row=0, column=2, padx=2)
+        self.end_minute.set("00")
+        
+        ttk.Label(end_frame, text=":").grid(row=0, column=3)
+        
+        self.end_second = ttk.Spinbox(end_frame, from_=0, to=59, width=3, format="%02.0f")
+        self.end_second.grid(row=0, column=4, padx=2)
+        self.end_second.set("00")
+        
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=2, column=0, pady=20)
+        
+        ttk.Button(button_frame, text="Insert", command=self.insert_time_range, style='Success.Modern.TButton').grid(row=0, column=0, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=self.destroy, style='Modern.TButton').grid(row=0, column=1, padx=5)
+        
+        # Center window
+        self.center_window()
+        
+    def center_window(self):
+        self.update_idletasks()
+        width = self.winfo_width()
+        height = self.winfo_height()
+        x = (self.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.winfo_screenheight() // 2) - (height // 2)
+        self.geometry(f'{width}x{height}+{x}+{y}')
+        
+    def insert_time_range(self):
+        start_time = f"{self.start_hour.get()}:{self.start_minute.get()}:{self.start_second.get()}"
+        end_time = f"{self.end_hour.get()}:{self.end_minute.get()}:{self.end_second.get()}"
+        self.callback(f"{start_time}-{end_time}")
+        self.destroy()
 
 class MainUI:
     def __init__(self, root):
@@ -150,15 +238,34 @@ class MainUI:
     def create_time_section(self):
         # Time Range Frame
         time_frame = ttk.LabelFrame(self.main_frame, text="Time Ranges", padding="10")
-        time_frame.grid(row=1, column=0, sticky="nsew", pady=10, padx=(0,5)) # Adjusted columnspan and padx
-        time_frame.grid_columnconfigure(0, weight=1)  # Make the time frame expand
+        time_frame.grid(row=1, column=0, sticky="nsew", pady=10, padx=(0,5))
+        time_frame.grid_columnconfigure(0, weight=1)
+
+        # Header frame to contain label and plus button
+        header_frame = ttk.Frame(time_frame)
+        header_frame.grid(row=0, column=0, sticky="ew")
+        header_frame.grid_columnconfigure(0, weight=1)
+
+        ttk.Label(
+            header_frame,
+            text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):",
+            style='Modern.TLabel'
+        ).grid(row=0, column=0, sticky="w", pady=5)
+
+        # Plus button
+        plus_button = ttk.Button(
+            header_frame,
+            text="+",
+            width=3,
+            command=self.show_time_selector,
+            style='Modern.TButton'
+        )
+        plus_button.grid(row=0, column=1, padx=(5,0))
 
         # Create a frame to contain the text widget and scrollbar
         time_text_frame = ttk.Frame(time_frame)
         time_text_frame.grid(row=1, column=0, sticky="nsew", pady=5)
         time_text_frame.grid_columnconfigure(0, weight=1)
-
-        ttk.Label(time_frame, text="Enter time ranges (e.g., 00:10-00:20, 01:00-01:30):", style='Modern.TLabel').grid(row=0, column=0, sticky="w", pady=5)
 
         # Text widget
         self.time_ranges_text = tk.Text(time_text_frame, height=5, wrap=tk.WORD)
@@ -169,6 +276,7 @@ class MainUI:
         time_scrollbar = ttk.Scrollbar(time_text_frame, orient="vertical", command=self.time_ranges_text.yview)
         time_scrollbar.grid(row=0, column=1, sticky="ns")
         self.time_ranges_text.config(yscrollcommand=time_scrollbar.set)
+
 
     def create_progress_section(self):
         # Progress Frame
@@ -559,6 +667,16 @@ class MainUI:
                 if other_codec != codec:
                     self.hw_accel_vars[other_codec].set(False)
         self.save_hw_accel_settings()
+    
+    def show_time_selector(self):
+        def add_time_range(time_range):
+            current_text = self.time_ranges_text.get("1.0", "end-1c")
+            if current_text and current_text.strip():
+                self.time_ranges_text.insert("end", f", {time_range}")
+            else:
+                self.time_ranges_text.insert("1.0", time_range)
+
+        TimeRangeSelector(self.root, add_time_range)
 
 def create_ui(root):
     return MainUI(root)
