@@ -76,6 +76,11 @@ class MainUI:
         self.hw_accel_vars = {}
         for _, codec in self.gpu_detector.get_available_encoders():
             self.hw_accel_vars[codec] = tk.BooleanVar(value=False)
+            
+        self.load_hw_accel_settings()
+        if not os.path.exists('hw_accel_settings.json'):
+            self.root.after(1000, self.show_hw_accel_dialog)  # Show dialog after window loads
+
 
         # Bind window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -517,13 +522,43 @@ class MainUI:
             original_filename,
             hw_encoder
         )).start()
-
+    
+    def save_hw_accel_settings(self):
+        settings = {codec: var.get() for codec, var in self.hw_accel_vars.items()}
+        try:
+            with open('hw_accel_settings.json', 'w') as f:
+                json.dump(settings, f)
+        except:
+            pass
+    
+    def load_hw_accel_settings(self):
+        try:
+            with open('hw_accel_settings.json', 'r') as f:
+                settings = json.load(f)
+                for codec, enabled in settings.items():
+                    if codec in self.hw_accel_vars:
+                        self.hw_accel_vars[codec].set(enabled)
+        except:
+            pass
+    
+    def show_hw_accel_dialog(self):
+        if self.gpu_detector.is_any_gpu_available():
+            if messagebox.askyesno("Hardware Acceleration", 
+                "Hardware acceleration is available and can significantly speed up video processing. "
+                "Would you like to enable it?\n\n"
+                "Note: You can enable/disable this later in Settings > Hardware Acceleration"):
+                # Enable the first available encoder
+                encoders = self.gpu_detector.get_available_encoders()
+                if encoders:
+                    self.hw_accel_vars[encoders[0][1]].set(True)
+                    self.save_hw_accel_settings()
+    
     def toggle_hw_acceleration(self, codec):
-    # Ensure only one hardware acceleration option is enabled at a time
         if self.hw_accel_vars[codec].get():
             for other_codec in self.hw_accel_vars:
                 if other_codec != codec:
                     self.hw_accel_vars[other_codec].set(False)
+        self.save_hw_accel_settings()
 
 def create_ui(root):
     return MainUI(root)

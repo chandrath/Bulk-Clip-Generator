@@ -105,6 +105,42 @@ def get_video_duration(video_path):
     except Exception as e:
         raise RuntimeError(f"Failed to get video duration: {str(e)}")
 
+def try_hw_accelerated_command(command, hw_encoder):
+    """Try hardware acceleration first, fall back to software if it fails"""
+    if hw_encoder:
+        try:
+            # Try hardware-accelerated encoding
+            stdout, stderr, returncode = run_ffmpeg_command(command)
+            if returncode == 0:
+                return stdout, stderr, returncode
+                
+            # If hardware encoding failed, modify command for software encoding
+            sw_command = command.copy()
+            encoder_index = sw_command.index(hw_encoder)
+            sw_command[encoder_index-1:encoder_index+1] = ["-c:v", "libx264"]
+            # Replace hardware-specific parameters with software ones
+            try:
+                preset_index = sw_command.index("-preset")
+                if "nvenc" in hw_encoder:
+                    sw_command[preset_index+1] = "fast"
+            except ValueError:
+                pass
+            try:
+                qp_index = sw_command.index("-qp")
+                sw_command[qp_index] = "-crf"
+            except ValueError:
+                pass
+                
+            return run_ffmpeg_command(sw_command)
+        except Exception:
+            # Fall back to software encoding
+            sw_command = command.copy()
+            encoder_index = sw_command.index(hw_encoder)
+            sw_command[encoder_index-1:encoder_index+1] = ["-c:v", "libx264"]
+            return run_ffmpeg_command(sw_command)
+    return run_ffmpeg_command(command)
+
+
 def normalize_video(input_file, output_file, lossless=False, hw_encoder=None):
     """Normalize video to a consistent format for concatenation"""
     command = [
@@ -148,7 +184,7 @@ def normalize_video(input_file, output_file, lossless=False, hw_encoder=None):
         output_file
     ])
 
-    stdout, stderr, returncode = run_ffmpeg_command(command)
+    stdout, stderr, returncode = try_hw_accelerated_command(command, hw_encoder)
     if returncode != 0 and returncode != -1:  # -1 indicates process was terminated
         raise RuntimeError(f"Error normalizing video: {stderr.decode().strip()}")
     return returncode == 0
@@ -206,7 +242,7 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
             temp_main
         ])
 
-        stdout, stderr, returncode = run_ffmpeg_command(cut_command)
+        stdout, stderr, returncode = try_hw_accelerated_command(cut_command, hw_encoder)
         if returncode != 0 and returncode != -1:
             # Only show actual error messages, not progress output
             error_lines = stderr.decode().strip().split('\n')

@@ -163,3 +163,5 @@ cython_debug/
 .codegpt
 user_config.json
 dxdiag.txt
+gpu_cache.json
+hw_accel_settings.json
