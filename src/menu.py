@@ -79,7 +79,8 @@ def show_about(parent):
 
     text = tk.Text(about_window, wrap=tk.WORD, height=7, width=50)
     text.pack(padx=10, pady=10)
-    text.insert(tk.END, "Bulk Clip Generator v0.1 (Alpha)\nA simple tool to cut multiple clips from a video.\n\nDeveloped By: Shree\n\n")
+    text.insert(tk.END, "A free and open-source GUI application that simplifies creating multiple video clips from a single source.\nDefine time ranges, optionally add intro/outro videos, and generate individual, branded clips.\n")
+
 
     text.config(state=tk.NORMAL)
     link_manager = HyperlinkManager(text)
