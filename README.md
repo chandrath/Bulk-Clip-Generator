@@ -11,7 +11,9 @@
 
 ---
 
-The **Bulk Clip Generator** simplifies the process of creating multiple clips from a longer video. Instead of manually cutting each segment, this application allows you to define multiple time ranges and generate individual video files for each. This is ideal for content creators, educators, YouTubers, podcasters, or anyone needing to extract specific moments from videos quickly and efficiently to publish separate clips. The ability to add separate intro and outro videos to the beginning and end of each generated clip further enhances your workflow. This free and open-source GUI tool streamlines your video editing workflow, saving time and effort.
+The **Bulk Clip Generator** simplifies the process of creating multiple clips from a longer video. Instead of manually cutting each segment, this application allows you to define multiple time ranges and generate individual video files for each.
+
+**This is ideal for content creators, educators, YouTubers, podcasters, or anyone needing to extract specific moments from videos quickly and efficiently to publish separate clips. The ability to add separate intro and outro videos to the beginning and end of each generated clip further enhances your workflow. This free and open-source GUI tool streamlines your video editing workflow, saving time and effort.**
 
 <small><i>Bulk Clip Generator is primarily tested and developed on Windows. While the source code is platform-independent, building the application on Linux or macOS may require platform-specific dependencies and procedures.</i></small>
 

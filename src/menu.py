@@ -34,7 +34,7 @@ class HyperlinkManager:
                 webbrowser.open(self.links[tag])
                 return
 
-def create_menu(root, ui_instance=None): # Make ui_instance optional
+def create_menu(root, ui_instance=None):  # Make ui_instance optional
     menubar = tk.Menu(root)
     root.config(menu=menubar)
 
@@ -70,7 +70,8 @@ def create_menu(root, ui_instance=None): # Make ui_instance optional
 
     # Help Menu
     help_menu = tk.Menu(menubar, tearoff=0)
-    help_menu.add_command(label="About", command=lambda: show_about(root)) # Pass root to show_about
+    help_menu.add_command(label="User Guide", command=lambda: webbrowser.open("https://www.example.com"))  # Dummy URL
+    help_menu.add_command(label="About", command=lambda: show_about(root))  # Pass root to show_about
     menubar.add_cascade(label="Help", menu=help_menu)
 
 def show_about(parent):
@@ -79,8 +80,7 @@ def show_about(parent):
 
     text = tk.Text(about_window, wrap=tk.WORD, height=9, width=60)
     text.pack(padx=10, pady=10)
-    text.insert(tk.END, "A free and open-source GUI application that simplifies creating multiple video clips from a single source.\nDefine time ranges, optionally add intro/outro videos, and generate individual, branded clips.\n\nDeveloped By: Shree\n")
-
+    text.insert(tk.END, "A free and open-source GUI application that simplifies creating multiple video clips from a single source.\nDefine time ranges, optionally add intro/outro videos, and generate individual, branded clips.\n\nSupport hardware acceleration for faster video export.\n\nDeveloped By: Shree\n")
 
     text.config(state=tk.NORMAL)
     link_manager = HyperlinkManager(text)
@@ -90,5 +90,5 @@ def show_about(parent):
 
 if __name__ == '__main__':
     root = tk.Tk()
-    create_menu(root) # Don't pass ui_instance for standalone test
+    create_menu(root)  # Don't pass ui_instance for standalone test
     root.mainloop()
