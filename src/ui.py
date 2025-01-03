@@ -346,14 +346,17 @@ class MainUI:
                     intro_clip if self.use_intro.get() else None,
                     outro_clip if self.use_outro.get() else None,
                     progress_callback=progress_handler,
-                    hw_encoder=hw_encoder,
+                    hw_encoder=hw_encoder if hw_acceleration_enabled else None,  # Ensure encoder is passed correctly
                     hw_acceleration_enabled=hw_acceleration_enabled
                 )
 
                 if not success:
-                    if error_message == "Processing was stopped by user":
-                        return  # Exit quietly if processing was stopped by user
-                    self.show_error(f"Error processing clip {i}: {error_message}")
+                    if not hw_acceleration_enabled:  # Specific case when HW acceleration is disabled
+                      self.show_error(
+                        f"Error processing clip {i} with software encoding: {error_message}"
+                    )
+                    else:  # General HW acceleration errors
+                      self.show_error(f"Error processing clip {i}: {error_message}")
                     self.root.after(0, self.stop_processing)
                     return
 
