@@ -227,7 +227,7 @@ class MainUI:
 
         # Quality Settings
         ttk.Label(output_frame, text="Quality:", style='Modern.TLabel').grid(row=1, column=0, sticky="w", pady=5)
-        self.quality_var = tk.StringVar(value="Compressed")
+        self.quality_var = tk.StringVar(value="Lossless")
         ttk.Radiobutton(output_frame, text="Lossless", variable=self.quality_var, value="Lossless").grid(row=1, column=1, sticky="w")
         ttk.Radiobutton(output_frame, text="Compressed", variable=self.quality_var, value="Compressed").grid(row=1, column=2, sticky="w")
 
@@ -459,7 +459,7 @@ class MainUI:
         self.outro_clip_dir.set("")
         self.time_ranges_text.delete("1.0", tk.END)
         self.output_location.set("")
-        self.quality_var.set("Compressed")
+        self.quality_var.set("Lossless")
         self.use_intro.set(False)
         self.use_outro.set(False)
         self.toggle_intro_outro()
