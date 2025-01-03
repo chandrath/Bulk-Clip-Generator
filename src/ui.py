@@ -351,12 +351,10 @@ class MainUI:
                 )
 
                 if not success:
-                    if not hw_acceleration_enabled:  # Specific case when HW acceleration is disabled
-                      self.show_error(
-                        f"Error processing clip {i} with software encoding: {error_message}"
-                    )
-                    else:  # General HW acceleration errors
-                      self.show_error(f"Error processing clip {i}: {error_message}")
+                    if error_message:
+                        self.show_error(f"Error processing clip {i}: {error_message}")
+                    else:
+                      self.show_error(f"Clip {i} failed without a specific error. Please check your settings.")
                     self.root.after(0, self.stop_processing)
                     return
 
