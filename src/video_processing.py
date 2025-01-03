@@ -105,20 +105,21 @@ def get_video_duration(video_path):
     except Exception as e:
         raise RuntimeError(f"Failed to get video duration: {str(e)}")
 
-def try_hw_accelerated_command(command, hw_encoder):
+def try_hw_accelerated_command(command, hw_encoder, hw_acceleration_enabled=False):
     """Try hardware acceleration first, fall back to software if it fails"""
-    if hw_encoder:
+    if hw_encoder and hw_acceleration_enabled:  # Check if acceleration is enabled
         try:
             # Try hardware-accelerated encoding
             stdout, stderr, returncode = run_ffmpeg_command(command)
             if returncode == 0:
                 return stdout, stderr, returncode
-                
-            # If hardware encoding failed, modify command for software encoding
+
+            # If hardware encoding failed, fall back to software encoding
             sw_command = command.copy()
             encoder_index = sw_command.index(hw_encoder)
             sw_command[encoder_index-1:encoder_index+1] = ["-c:v", "libx264"]
-            # Replace hardware-specific parameters with software ones
+
+            # Replace hardware-specific parameters
             try:
                 preset_index = sw_command.index("-preset")
                 if "nvenc" in hw_encoder:
@@ -130,7 +131,7 @@ def try_hw_accelerated_command(command, hw_encoder):
                 sw_command[qp_index] = "-crf"
             except ValueError:
                 pass
-                
+
             return run_ffmpeg_command(sw_command)
         except Exception:
             # Fall back to software encoding
@@ -138,10 +139,15 @@ def try_hw_accelerated_command(command, hw_encoder):
             encoder_index = sw_command.index(hw_encoder)
             sw_command[encoder_index-1:encoder_index+1] = ["-c:v", "libx264"]
             return run_ffmpeg_command(sw_command)
-    return run_ffmpeg_command(command)
 
+    # If no hardware acceleration is enabled, use software encoding
+    sw_command = command.copy()
+    if hw_encoder in sw_command:
+        encoder_index = sw_command.index(hw_encoder)
+        sw_command[encoder_index-1:encoder_index+1] = ["-c:v", "libx264"]
+    return run_ffmpeg_command(sw_command)
 
-def normalize_video(input_file, output_file, lossless=False, hw_encoder=None):
+def normalize_video(input_file, output_file, lossless=False, hw_encoder=None, hw_acceleration_enabled=False):
     """Normalize video to a consistent format for concatenation"""
     command = [
         "-i", input_file,
@@ -150,7 +156,7 @@ def normalize_video(input_file, output_file, lossless=False, hw_encoder=None):
     ]
 
     # Handle hardware acceleration
-    if hw_encoder:
+    if hw_encoder and hw_acceleration_enabled:
         command.extend(["-c:v", hw_encoder])
         if hw_encoder == "h264_nvenc":
             command.extend(["-preset", "p4"])  # NVIDIA preset
@@ -165,12 +171,12 @@ def normalize_video(input_file, output_file, lossless=False, hw_encoder=None):
         ])
 
     if lossless:
-        if hw_encoder:
+        if hw_encoder and hw_acceleration_enabled:
             command.extend(["-qp", "18"])  # Hardware equivalent of CRF
         else:
             command.extend(["-crf", "18"])
     else:
-        if hw_encoder:
+        if hw_encoder and hw_acceleration_enabled:
             command.extend(["-qp", "23"])
         else:
             command.extend(["-crf", "23"])
@@ -184,13 +190,14 @@ def normalize_video(input_file, output_file, lossless=False, hw_encoder=None):
         output_file
     ])
 
-    stdout, stderr, returncode = try_hw_accelerated_command(command, hw_encoder)
+    stdout, stderr, returncode = try_hw_accelerated_command(command, hw_encoder, hw_acceleration_enabled)
     if returncode != 0 and returncode != -1:  # -1 indicates process was terminated
         raise RuntimeError(f"Error normalizing video: {stderr.decode().strip()}")
     return returncode == 0
 
-def cut_video_segment(input_file, output_file, start_time, end_time, lossless=False, 
-                     intro_path=None, outro_path=None, progress_callback=None, hw_encoder=None):
+def cut_video_segment(input_file, output_file, start_time, end_time, lossless=False,
+                     intro_path=None, outro_path=None, progress_callback=None,
+                     hw_encoder=None, hw_acceleration_enabled=False):
     # Create temporary directory for intermediate files
     temp_dir = mkdtemp()
     temp_files = []
@@ -207,7 +214,7 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
         ]
 
         # Add hardware acceleration parameters
-        if hw_encoder:
+        if hw_encoder and hw_acceleration_enabled:
             cut_command.extend(["-c:v", hw_encoder])
             if hw_encoder == "h264_nvenc":
                 cut_command.extend(["-preset", "p4"])
@@ -223,12 +230,12 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
 
         # Add quality settings
         if lossless:
-            if hw_encoder:
+            if hw_encoder and hw_acceleration_enabled:
                 cut_command.extend(["-qp", "18"])
             else:
                 cut_command.extend(["-crf", "18"])
         else:
-            if hw_encoder:
+            if hw_encoder and hw_acceleration_enabled:
                 cut_command.extend(["-qp", "23"])
             else:
                 cut_command.extend(["-crf", "23"])
@@ -242,7 +249,7 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
             temp_main
         ])
 
-        stdout, stderr, returncode = try_hw_accelerated_command(cut_command, hw_encoder)
+        stdout, stderr, returncode = try_hw_accelerated_command(cut_command, hw_encoder, hw_acceleration_enabled)
         if returncode != 0 and returncode != -1:
             # Only show actual error messages, not progress output
             error_lines = stderr.decode().strip().split('\n')
@@ -261,7 +268,7 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
 
         if intro_path:
             temp_intro = os.path.join(temp_dir, "temp_intro.mp4")
-            if normalize_video(intro_path, temp_intro, lossless, hw_encoder):
+            if normalize_video(intro_path, temp_intro, lossless, hw_encoder, hw_acceleration_enabled):
                 concat_list.append(temp_intro)
                 temp_files.append(temp_intro)
             elif current_process is None:  # Process was terminated
@@ -271,7 +278,7 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
 
         if outro_path:
             temp_outro = os.path.join(temp_dir, "temp_outro.mp4")
-            if normalize_video(outro_path, temp_outro, lossless, hw_encoder):
+            if normalize_video(outro_path, temp_outro, lossless, hw_encoder, hw_acceleration_enabled):
                 concat_list.append(temp_outro)
                 temp_files.append(temp_outro)
             elif current_process is None:  # Process was terminated
@@ -312,7 +319,6 @@ def cut_video_segment(input_file, output_file, start_time, end_time, lossless=Fa
             raise RuntimeError(error_message)
         if returncode == -1:  # Process was terminated
             return False, "Processing was stopped by user"
-
 
         # After final concatenation:
         if progress_callback:

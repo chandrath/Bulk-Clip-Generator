@@ -1,4 +1,5 @@
 # ui.py
+# ui.py
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox, simpledialog
 import os
@@ -15,76 +16,76 @@ class TimeRangeSelector(tk.Toplevel):
     def __init__(self, parent, callback):
         super().__init__(parent)
         self.callback = callback
-        
+
         # Window setup
         self.title("Add Time Range")
         self.geometry("400x250")
         self.resizable(False, False)
-        
+
         # Make it modal
         self.transient(parent)
         self.grab_set()
-        
+
         # Style configuration
         style = ttk.Style()
         self.configure(bg=style.lookup('TFrame', 'background'))
-        
+
         # Main frame
         main_frame = ttk.Frame(self, padding="20")
         main_frame.grid(row=0, column=0, sticky="nsew")
-        
+
         # Start time frame
         start_frame = ttk.LabelFrame(main_frame, text="Start Time", padding="10")
         start_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-        
+
         # Start time spinboxes
         self.start_hour = ttk.Spinbox(start_frame, from_=0, to=99, width=3, format="%02.0f")
         self.start_hour.grid(row=0, column=0, padx=2)
         self.start_hour.set("00")
-        
+
         ttk.Label(start_frame, text=":").grid(row=0, column=1)
-        
+
         self.start_minute = ttk.Spinbox(start_frame, from_=0, to=59, width=3, format="%02.0f")
         self.start_minute.grid(row=0, column=2, padx=2)
         self.start_minute.set("00")
-        
+
         ttk.Label(start_frame, text=":").grid(row=0, column=3)
-        
+
         self.start_second = ttk.Spinbox(start_frame, from_=0, to=59, width=3, format="%02.0f")
         self.start_second.grid(row=0, column=4, padx=2)
         self.start_second.set("00")
-        
+
         # End time frame
         end_frame = ttk.LabelFrame(main_frame, text="End Time", padding="10")
         end_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
-        
+
         # End time spinboxes
         self.end_hour = ttk.Spinbox(end_frame, from_=0, to=99, width=3, format="%02.0f")
         self.end_hour.grid(row=0, column=0, padx=2)
         self.end_hour.set("00")
-        
+
         ttk.Label(end_frame, text=":").grid(row=0, column=1)
-        
+
         self.end_minute = ttk.Spinbox(end_frame, from_=0, to=59, width=3, format="%02.0f")
         self.end_minute.grid(row=0, column=2, padx=2)
         self.end_minute.set("00")
-        
+
         ttk.Label(end_frame, text=":").grid(row=0, column=3)
-        
+
         self.end_second = ttk.Spinbox(end_frame, from_=0, to=59, width=3, format="%02.0f")
         self.end_second.grid(row=0, column=4, padx=2)
         self.end_second.set("00")
-        
+
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=2, column=0, pady=20)
-        
+
         ttk.Button(button_frame, text="Insert", command=self.insert_time_range, style='Success.Modern.TButton').grid(row=0, column=0, padx=5)
         ttk.Button(button_frame, text="Cancel", command=self.destroy, style='Modern.TButton').grid(row=0, column=1, padx=5)
-        
+
         # Center window
         self.center_window()
-        
+
     def center_window(self):
         self.update_idletasks()
         width = self.winfo_width()
@@ -92,7 +93,7 @@ class TimeRangeSelector(tk.Toplevel):
         x = (self.winfo_screenwidth() // 2) - (width // 2)
         y = (self.winfo_screenheight() // 2) - (height // 2)
         self.geometry(f'{width}x{height}+{x}+{y}')
-        
+
     def insert_time_range(self):
         start_time = f"{self.start_hour.get()}:{self.start_minute.get()}:{self.start_second.get()}"
         end_time = f"{self.end_hour.get()}:{self.end_minute.get()}:{self.end_second.get()}"
@@ -164,11 +165,10 @@ class MainUI:
         self.hw_accel_vars = {}
         for _, codec in self.gpu_detector.get_available_encoders():
             self.hw_accel_vars[codec] = tk.BooleanVar(value=False)
-            
+
         self.load_hw_accel_settings()
         if not os.path.exists('hw_accel_settings.json'):
             self.root.after(1000, self.show_hw_accel_dialog)  # Show dialog after window loads
-
 
         # Bind window close event
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -277,7 +277,6 @@ class MainUI:
         time_scrollbar.grid(row=0, column=1, sticky="ns")
         self.time_ranges_text.config(yscrollcommand=time_scrollbar.set)
 
-
     def create_progress_section(self):
         # Progress Frame
         progress_frame = ttk.LabelFrame(self.main_frame, text="Progress", padding="10")
@@ -314,7 +313,7 @@ class MainUI:
         """Thread-safe info message display"""
         self.root.after(0, lambda: messagebox.showinfo("Information", message))
 
-    def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename, hw_encoder=None):
+    def process_clips(self, parsed_ranges, source_video, intro_clip, outro_clip, output_location, lossless, original_filename, hw_encoder=None, hw_acceleration_enabled=False):
         self.total_clips = len(parsed_ranges)
         self.start_time = time.time()
         self.processed_clips = 0  # Reset processed clips counter
@@ -347,7 +346,8 @@ class MainUI:
                     intro_clip if self.use_intro.get() else None,
                     outro_clip if self.use_outro.get() else None,
                     progress_callback=progress_handler,
-                    hw_encoder=hw_encoder
+                    hw_encoder=hw_encoder,
+                    hw_acceleration_enabled=hw_acceleration_enabled
                 )
 
                 if not success:
@@ -510,7 +510,7 @@ class MainUI:
                 self.time_ranges_text.delete("1.0", tk.END)
                 self.time_ranges_text.insert(tk.END, config.get('time_ranges_text', ''))
                 self.output_location.set(config.get('output_location', ''))
-                self.quality_var.set(config.get('quality_var', 'Compressed'))
+                self.quality_var.set(config.get('quality_var', 'Lossless'))
         except FileNotFoundError:
             pass
         except json.JSONDecodeError:
@@ -565,6 +565,9 @@ class MainUI:
             messagebox.showinfo("Processing", "A processing task is already active.")
             return
 
+        # Ensure the UI is updated before reading the variable
+        self.root.update_idletasks()
+
         source_video = self.source_video_path.get()
         intro_clip = self.intro_clip_path.get() if self.use_intro.get() else None
         outro_clip = self.outro_clip_path.get() if self.use_outro.get() else None
@@ -602,11 +605,13 @@ class MainUI:
                 self.show_error(f"Invalid time range format: {range_str.strip()}")
                 return
 
-        # Get selected hardware encoder
+        # Get selected hardware encoder and check if it's enabled
         hw_encoder = None
+        hw_acceleration_enabled = False
         for codec, var in self.hw_accel_vars.items():
             if var.get():
                 hw_encoder = codec
+                hw_acceleration_enabled = True
                 break
 
         # Start processing
@@ -628,9 +633,10 @@ class MainUI:
             output_location,
             lossless,
             original_filename,
-            hw_encoder
+            hw_encoder,
+            hw_acceleration_enabled
         )).start()
-    
+
     def save_hw_accel_settings(self):
         settings = {codec: var.get() for codec, var in self.hw_accel_vars.items()}
         try:
@@ -638,7 +644,7 @@ class MainUI:
                 json.dump(settings, f)
         except:
             pass
-    
+
     def load_hw_accel_settings(self):
         try:
             with open('hw_accel_settings.json', 'r') as f:
@@ -648,10 +654,10 @@ class MainUI:
                         self.hw_accel_vars[codec].set(enabled)
         except:
             pass
-    
+
     def show_hw_accel_dialog(self):
         if self.gpu_detector.is_any_gpu_available():
-            if messagebox.askyesno("Hardware Acceleration", 
+            if messagebox.askyesno("Hardware Acceleration",
                 "Hardware acceleration is available and can significantly speed up video processing. "
                 "Would you like to enable it?\n\n"
                 "Note: You can enable/disable this later in Settings > Hardware Acceleration"):
@@ -660,14 +666,14 @@ class MainUI:
                 if encoders:
                     self.hw_accel_vars[encoders[0][1]].set(True)
                     self.save_hw_accel_settings()
-    
+
     def toggle_hw_acceleration(self, codec):
         if self.hw_accel_vars[codec].get():
             for other_codec in self.hw_accel_vars:
                 if other_codec != codec:
                     self.hw_accel_vars[other_codec].set(False)
         self.save_hw_accel_settings()
-    
+
     def show_time_selector(self):
         def add_time_range(time_range):
             current_text = self.time_ranges_text.get("1.0", "end-1c")
