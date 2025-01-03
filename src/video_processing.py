@@ -6,7 +6,6 @@ from tempfile import mkdtemp
 import shutil
 import signal
 
-
 # Global variable to store current FFmpeg process
 current_process = None
 
@@ -29,13 +28,18 @@ def run_ffmpeg_command(command_args, is_ffprobe=False, timeout=None):
         raise FileNotFoundError(f"{executable} not found at {ffmpeg_path}")
 
     full_command = [ffmpeg_path] + command_args
+    startupinfo = None
+    if sys.platform == "win32":
+         startupinfo = subprocess.STARTUPINFO()
+         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+         startupinfo.wShowWindow = subprocess.SW_HIDE
 
     try:
         current_process = subprocess.Popen(
             full_command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            startupinfo=None if is_ffprobe else subprocess.STARTUPINFO()
+            startupinfo = startupinfo
         )
         stdout, stderr = current_process.communicate(timeout=timeout)  # Added timeout
         return_code = current_process.returncode
