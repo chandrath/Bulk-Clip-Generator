@@ -80,7 +80,7 @@ def show_about(parent):
 
     text = tk.Text(about_window, wrap=tk.WORD, height=12, width=60)
     text.pack(padx=10, pady=10)
-    text.insert(tk.END, "Bulk Clip Generator || Version 1.0.1 Build 1\n\nA free and open-source GUI application that simplifies creating multiple video clips from a single source.\nDefine time ranges, optionally add intro/outro videos, and generate individual, branded clips.\n\nSupport hardware acceleration for faster video export.\n\nDeveloped By: Shree\n")
+    text.insert(tk.END, "Bulk Clip Generator || Version 1.0.2 Build 2\n\nA free and open-source GUI application that simplifies creating multiple video clips from a single source.\nDefine time ranges, optionally add intro/outro videos, and generate individual, branded clips.\n\nSupport hardware acceleration for faster video export.\n\nDeveloped By: Shree\n")
 
 
     text.config(state=tk.NORMAL)
